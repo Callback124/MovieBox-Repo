@@ -135,7 +135,7 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
     builder: (context, _) => WillPopScope(
       onWillPop: _handleBack,
       child: Scaffold(
-        appBar: AppBar(
+        appBar: _page == 0 ? AppBar(
           titleSpacing: 16,
           title: InkWell(
             borderRadius: BorderRadius.circular(6),
@@ -153,7 +153,7 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
             IconButton(tooltip: 'Settings', onPressed: () => _goToPage(4), icon: const Icon(Icons.settings_outlined)),
             const SizedBox(width: 4),
           ],
-        ),
+        ) : null,
         body: IndexedStack(index: _page, children: _pages),
       ),
     ),

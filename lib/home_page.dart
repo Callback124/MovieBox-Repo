@@ -30,7 +30,6 @@ class _HomePageState extends State<HomePage> {
         return CustomScrollView(
           controller: _scrollController,
           slivers: [
-            const SliverToBoxAdapter(child: _ContinueWatching()),
             if (ps.isEmpty)
               SliverToBoxAdapter(
                 child: EmptyState(
