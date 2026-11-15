@@ -141,12 +141,8 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
             onTap: () => _chooseProvider(context),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Flexible(child: Text(_page == 4 ? 'JioSaavn' : app.scopeName, maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: -.4))),
-                const SizedBox(width: 5),
-                const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
-              ]),
+              child: Text(_page == 4 ? 'JioSaavn' : app.scopeName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: -.4)),
             ),
           ),
           actions: [
