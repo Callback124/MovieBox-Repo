@@ -1,162 +1,61 @@
 import 'package:flutter/material.dart';
+import 'downloads_page.dart';
+import 'downloads_service.dart';
+import 'home_page.dart';
+import 'search_page.dart';
+import 'settings_page.dart';
+import 'store.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try { await app.init().timeout(const Duration(seconds: 8)); } catch (_) {}
+  try { await DownloadService.instance.loadSettings().timeout(const Duration(seconds: 5)); } catch (_) {}
   runApp(const MovieFoxApp());
+}
+
+ThemeData _lightTheme() {
+  const bg = Colors.white;
+  final scheme = ColorScheme.fromSeed(seedColor: const Color(0xFF3157C8), brightness: Brightness.light).copyWith(surface: bg);
+  return ThemeData(
+    useMaterial3: true, brightness: Brightness.light, colorScheme: scheme,
+    scaffoldBackgroundColor: bg,
+    appBarTheme: const AppBarTheme(backgroundColor: bg, foregroundColor: Colors.black, surfaceTintColor: Colors.transparent, scrolledUnderElevation: 0, elevation: 0),
+    inputDecorationTheme: const InputDecorationTheme(filled: true, fillColor: Color(0xFFF3F4F6), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(4)), borderSide: BorderSide.none)),
+  );
 }
 
 class MovieFoxApp extends StatelessWidget {
   const MovieFoxApp({super.key});
-
-  static const Color _accent = Color(0xFFE50914);
-  static const Color _background = Color(0xFFFFFFFF);
-  static const Color _surface = Color(0xFFF5F5F5);
-  static const Color _text = Color(0xFF171717);
-
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'MovieFox',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: _background,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: _accent,
-          brightness: Brightness.light,
-          surface: _background,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: _background,
-          foregroundColor: _text,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          surfaceTintColor: Colors.transparent,
-        ),
-        iconButtonTheme: IconButtonThemeData(
-          style: IconButton.styleFrom(
-            foregroundColor: _text,
-            backgroundColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
-        ),
-        cardTheme: CardThemeData(
-          color: _surface,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(4),
-          ),
-        ),
-        useMaterial3: true,
-      ),
-      home: const MovieFoxHomePage(),
-    );
-  }
+  Widget build(BuildContext context) => MaterialApp(title: 'MovieFox', debugShowCheckedModeBanner: false, theme: _lightTheme(), home: const MovieFoxShell());
 }
 
-class MovieFoxHomePage extends StatefulWidget {
-  const MovieFoxHomePage({super.key});
-
+class MovieFoxShell extends StatefulWidget {
+  const MovieFoxShell({super.key});
   @override
-  State<MovieFoxHomePage> createState() => _MovieFoxHomePageState();
+  State<MovieFoxShell> createState() => _MovieFoxShellState();
 }
 
-class _MovieFoxHomePageState extends State<MovieFoxHomePage> {
-  String _currentPage = 'Home';
-
-  void _openPage(String page) {
-    setState(() => _currentPage = page);
-  }
-
+class _MovieFoxShellState extends State<MovieFoxShell> {
+  int _page = 0;
+  late final List<Widget> _pages = const [HomePage(), SearchPage(), DownloadsPage(), SettingsPage()];
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        titleSpacing: 20,
-        title: const Text(
-          'MOVIEFOX',
-          style: TextStyle(
-            color: MovieFoxApp._accent,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.2,
-            fontSize: 20,
-          ),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Search',
-            onPressed: () => _openPage('Search'),
-            icon: const Icon(Icons.search, size: 25),
-          ),
-          IconButton(
-            tooltip: 'Downloads',
-            onPressed: () => _openPage('Downloads'),
-            icon: const Icon(Icons.download_outlined, size: 24),
-          ),
-          IconButton(
-            tooltip: 'Settings',
-            onPressed: () => _openPage('Settings'),
-            icon: const Icon(Icons.settings_outlined, size: 24),
-          ),
-          const SizedBox(width: 10),
-        ],
-      ),
-      body: _buildPage(context),
-    );
+  void initState() {
+    super.initState();
+    DownloadService.instance.onOpenDownloads = () { if (mounted) setState(() => _page = 2); };
   }
-
-  Widget _buildPage(BuildContext context) {
-    if (_currentPage == 'Home') {
-      return const Center(
-        child: Text(
-          'Welcome to MovieFox',
-          style: TextStyle(
-            color: MovieFoxApp._text,
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      );
-    }
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            _currentPage == 'Search'
-                ? Icons.search
-                : _currentPage == 'Downloads'
-                    ? Icons.download_outlined
-                    : Icons.settings_outlined,
-            size: 48,
-            color: MovieFoxApp._accent,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            _currentPage,
-            style: const TextStyle(
-              color: MovieFoxApp._text,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: () => _openPage('Home'),
-            style: TextButton.styleFrom(
-              foregroundColor: MovieFoxApp._accent,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            child: const Text('Back to Home'),
-          ),
-        ],
-      ),
-    );
-  }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      titleSpacing: 16,
+      title: const Text('MovieFox', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -.4)),
+      actions: [
+        IconButton(tooltip: 'Search', onPressed: () => setState(() => _page = 1), icon: const Icon(Icons.search)),
+        IconButton(tooltip: 'Downloads', onPressed: () => setState(() => _page = 2), icon: const Icon(Icons.download_outlined)),
+        IconButton(tooltip: 'Settings', onPressed: () => setState(() => _page = 3), icon: const Icon(Icons.settings_outlined)),
+        const SizedBox(width: 4),
+      ],
+    ),
+    body: IndexedStack(index: _page, children: _pages),
+  );
 }

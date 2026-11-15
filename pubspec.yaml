@@ -1,6 +1,6 @@
 name: moviefox
-description: MovieFox Android app base
-publish_to: 'none'
+description: Provider-based streaming client for Android and iOS.
+publish_to: none
 version: 1.0.0+1
 
 environment:
@@ -9,12 +9,24 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
+  http: ^1.2.2
+  crypto: ^3.0.6
+  shared_preferences: ^2.3.2
+  cached_network_image: ^3.4.1
+  flutter_svg: ^2.0.10+1
+  url_launcher: ^6.3.0
+  video_player: ^2.14.1
+  just_audio: ^0.9.46
+  just_audio_background: ^0.0.1-beta.17
+  audio_service: ^0.18.15
+  dart_des: ^1.0.2
+  ffmpeg_kit_flutter_new_https: ^2.6.8
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
