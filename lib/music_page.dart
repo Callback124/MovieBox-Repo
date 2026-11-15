@@ -86,8 +86,7 @@ class _MusicPageState extends State<MusicPage> {
       const SizedBox(height:8),SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:List.generate(4,(i)=>Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(label:Text(['Songs','Albums','Playlists','Artists'][i]),selected:tab==i,showCheckmark:false,onSelected:(_){setState(()=>tab=i);if(query.text.isNotEmpty)search(query.text);}))))),
     ]))),
     if(loading)const SliverToBoxAdapter(child:LinearProgressIndicator()),
-    if(searching&&tab==0)SliverToBoxAdapter(child:Column(children:[for(var i=0;i<songs.length;i++)_songTile(songs[i],songs)])),
-    if(searching&&tab!=0)SliverToBoxAdapter(child:Column(children:[for(final m in media)ListTile(leading:ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.network(img(m),width:52,height:52,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.music_note))),title:Text(saavnClean(m['title']??m['name']??'Music')),subtitle:Text(saavnClean(m['subtitle']??m['type']??'')),onTap:()=>open(m))])),
+    if(searching && (songs.isNotEmpty || media.isNotEmpty)) _musicSearchGrid(),
     if(!searching)SliverToBoxAdapter(child:FutureBuilder<List<SaavnSection>>(future:home,builder:(context,snap){
       if(snap.connectionState==ConnectionState.waiting)return const Padding(padding:EdgeInsets.all(32),child:Center(child:CircularProgressIndicator()));
       if(snap.hasError)return Padding(padding:const EdgeInsets.all(20),child:Column(children:[Text('JioSaavn load failed: '+snap.error.toString()),TextButton(onPressed:()=>setState(()=>home=api.home()),child:const Text('Retry'))]));
@@ -95,6 +94,50 @@ class _MusicPageState extends State<MusicPage> {
       return Column(children:[for(final sec in sections)_section(sec)]);
     })),
   ]));
+  Widget _musicSearchGrid() => SliverPadding(
+    padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+    sliver: SliverGrid.builder(
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 190, childAspectRatio: .82,
+        crossAxisSpacing: 12, mainAxisSpacing: 14,
+      ),
+      itemCount: tab == 0 ? songs.length : media.length,
+      itemBuilder: (context, i) {
+        if (tab == 0) {
+          final song = songs[i];
+          return InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => play(songs, i),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox.expand(
+                child: song.image.isEmpty ? const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42))
+                  : Image.network(song.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42))),
+              ))),
+              const SizedBox(height: 7),
+              Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+            ]),
+          );
+        }
+        final item = media[i];
+        final image = img(item);
+        return InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => open(item),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox.expand(
+              child: image.isEmpty ? const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42))
+                : Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42))),
+            ))),
+            const SizedBox(height: 7),
+            Text(saavnClean(item['title'] ?? item['name'] ?? 'Music'), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(saavnClean(item['subtitle'] ?? item['type'] ?? ''), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+          ]),
+        );
+      },
+    ),
+  );
+
   Widget _section(SaavnSection s)=>Padding(padding:const EdgeInsets.only(bottom:20),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
     Padding(padding:const EdgeInsets.fromLTRB(16,0,16,10),child:Text(s.title,style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold))),
     SizedBox(height:188,child:ListView.builder(scrollDirection:Axis.horizontal,padding:const EdgeInsets.symmetric(horizontal:16),itemCount:s.items.length,itemBuilder:(context,i){final m=s.items[i];final image=img(m);return GestureDetector(onTap:()=>s.title.toLowerCase().contains('genres')? _searchGenre(saavnClean(m['title']??m['name']??'')) : open(m),child:SizedBox(width:136,child:Padding(padding:const EdgeInsets.only(right:12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
