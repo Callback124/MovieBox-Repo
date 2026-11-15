@@ -18,18 +18,10 @@ class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
 
   @override
-  State<SearchPage> createState() => _SearchPageState();
+  State<SearchPage> createState() => SearchPageState();
 }
 
-class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMixin {
-  static String _savedQuery = '';
-  static List<_Group> _savedGroups = const [];
-  static List<String> _savedSuggestions = const [];
-  static double _savedOffset = 0;
-  static bool _savedHasMore = false;
-  static int _savedPage = 1;
-  static String? _savedSearchCursor;
-
+class SearchPageState extends State<SearchPage> {
   final _ctrl = TextEditingController();
   late final ScrollController _scroll;
   Timer? _debounce;
@@ -44,36 +36,30 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
   List<String> _suggestions = const [];
 
   @override
-  bool get wantKeepAlive => true;
-
-  @override
   void initState() {
     super.initState();
-    _ctrl.text = _savedQuery;
-    _query = _savedQuery;
-    _groups = _savedGroups;
-    _suggestions = _savedSuggestions;
-    _hasMore = _savedHasMore;
-    _page = _savedPage;
-    _searchCursor = _savedSearchCursor;
-    _scroll = ScrollController(initialScrollOffset: _savedOffset);
-    _scroll.addListener(_saveSession);
+    _scroll = ScrollController();
   }
 
-  void _saveSession() {
-    _savedQuery = _query;
-    _savedGroups = _groups;
-    _savedSuggestions = _suggestions;
-    _savedHasMore = _hasMore;
-    _savedPage = _page;
-    _savedSearchCursor = _searchCursor;
-    if (_scroll.hasClients) _savedOffset = _scroll.offset;
+  void resetSearch() {
+    ++_token;
+    _debounce?.cancel();
+    _ctrl.clear();
+    _query = '';
+    _groups = const [];
+    _suggestions = const [];
+    _loading = false;
+    _loadingMore = false;
+    _hasMore = false;
+    _page = 1;
+    _searchCursor = null;
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _saveSession();
-    _scroll.removeListener(_saveSession);
+
     _debounce?.cancel();
     _scroll.dispose();
     _ctrl.dispose();
@@ -90,7 +76,7 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
       _hasMore = false;
       _suggestions = const [];
     });
-    _saveSession();
+
     _loadSuggestions(v);
   }
 
@@ -112,7 +98,7 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
                   ? await MovieBoxAdapter().suggestions(q) : const <String>[];
       if (!mounted || _ctrl.text.trim() != q) return;
       setState(() => _suggestions = values.take(8).toList());
-      _saveSession();
+
     } catch (_) {
       if (mounted) setState(() => _suggestions = const []);
     }
@@ -122,7 +108,7 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
     _ctrl.text = value;
     _ctrl.selection = TextSelection.collapsed(offset: value.length);
     setState(() => _suggestions = const []);
-    _saveSession();
+
     _search(value);
   }
 
@@ -139,7 +125,7 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
       return;
     }
     if (_scroll.hasClients) _scroll.jumpTo(0);
-    _savedOffset = 0;
+
     setState(() {
       _query = q;
       _loading = true;
@@ -185,7 +171,7 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
       _groups = groups;
       _loading = false;
     });
-    _saveSession();
+
     WidgetsBinding.instance.addPostFrameCallback((_) => _onScroll());
   }
 
@@ -230,7 +216,7 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
           _hasMore = moreAvailable && fresh.isNotEmpty;
           _loadingMore = false;
         });
-        _saveSession();
+
         WidgetsBinding.instance.addPostFrameCallback((_) => _onScroll());
       } else {
         setState(() => _loadingMore = false);
@@ -243,7 +229,7 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
+
     final multi = _groups.length > 1;
     final nothing = !_loading &&
         _query.isNotEmpty &&

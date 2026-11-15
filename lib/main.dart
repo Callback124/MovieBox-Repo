@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'downloads_page.dart';
 import 'downloads_service.dart';
 import 'home_page.dart';
@@ -41,7 +42,11 @@ class MovieFoxShell extends StatefulWidget {
 class _MovieFoxShellState extends State<MovieFoxShell> {
   int _page = 0;
   final List<int> _pageHistory = [];
-  late final List<Widget> _pages = const [HomePage(), SearchPage(), DownloadsPage(), HistoryPage(), SettingsPage(), MusicPage()];
+  final _searchKey = GlobalKey<SearchPageState>();
+  late final List<Widget> _pages = [
+    const HomePage(), SearchPage(key: _searchKey), const DownloadsPage(),
+    const HistoryPage(), const SettingsPage(), const MusicPage(),
+  ];
 
   @override
   void initState() {
@@ -51,6 +56,7 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
 
   void _goToPage(int next) {
     if (_page == next) return;
+    if (next == 1) _searchKey.currentState?.resetSearch();
     setState(() {
       _pageHistory.add(_page);
       _page = next;
@@ -58,6 +64,7 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
   }
 
   Future<bool> _handleBack() async {
+    if (_page == 1) _searchKey.currentState?.resetSearch();
     if (_pageHistory.isNotEmpty) {
       setState(() => _page = _pageHistory.removeLast());
       return false;
@@ -69,12 +76,22 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
     return true;
   }
 
-  IconData _providerIcon(String kind) => switch (kind) {
-    'moviebox' => Icons.movie_creation_outlined,
-    'storytv' => Icons.smart_display_outlined,
-    'freereels' => Icons.video_library_outlined,
-    _ => Icons.extension_outlined,
-  };
+  Widget _providerIcon(String kind) {
+    const movieBox = 'https://h5-static.aoneroom.com/ssrStatic/mbOfficial/public/_nuxt/image-1.apJjVir2.svg';
+    const storyTv = 'https://play-lh.googleusercontent.com/A5ISR8CT9j9gTFpqTSJBXwvxWKk1WmJlJ8-WRl7dYUzI0U3srRPCF0t6_sX6Jvfl1Su1_-p0R5k9wd4fur79VQ';
+    const freeReels = 'https://cdn.aptoide.com/imgs/f/1/c/f1c5e0e44aeeb449090037d9088cb0d2_icon.png';
+    const jioSaavn = 'https://play-lh.googleusercontent.com/tJwz_QkxqQN1yFfb8ItXc2hpfzzSfxA-sdqaPGv51ldOFDXCMSmG0coD0uCzKo5y28rJLzyiIY7tmCHiuOOtdKM';
+    if (kind == 'moviebox') {
+      return SvgPicture.network(movieBox, width: 27, height: 27, fit: BoxFit.contain,
+        placeholderBuilder: (_) => const Icon(Icons.movie_creation_outlined, size: 24),
+      );
+    }
+    final url = kind == 'storytv' ? storyTv : kind == 'freereels' ? freeReels : jioSaavn;
+    return Image.network(url, width: 27, height: 27, fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => Icon(kind == 'storytv' ? Icons.smart_display_outlined :
+        kind == 'freereels' ? Icons.video_library_outlined : Icons.music_note_rounded, size: 24),
+    );
+  }
 
   void _chooseProvider(BuildContext context) {
     showModalBottomSheet<void>(
@@ -113,7 +130,7 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
                     ),
                   _ProviderChoice(
                     name: 'JioSaavn',
-                    icon: Icons.music_note_rounded,
+                    icon: _providerIcon('jiosaavn'),
                     selected: _page == 5,
                     onTap: () {
                       Navigator.pop(sheetContext);
@@ -135,7 +152,7 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
     builder: (context, _) => WillPopScope(
       onWillPop: _handleBack,
       child: Scaffold(
-        appBar: _page == 0 ? AppBar(
+        appBar: (_page == 0 || _page == 5) ? AppBar(
           titleSpacing: 16,
           title: InkWell(
             borderRadius: BorderRadius.circular(6),
@@ -163,7 +180,7 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
 class _ProviderChoice extends StatelessWidget {
   const _ProviderChoice({required this.name, required this.icon, required this.selected, required this.onTap});
   final String name;
-  final IconData icon;
+  final Widget icon;
   final bool selected;
   final VoidCallback onTap;
 
@@ -177,7 +194,7 @@ class _ProviderChoice extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(children: [
-          Icon(icon, size: 22, color: selected ? const Color(0xFF3157C8) : Colors.black87),
+          SizedBox(width: 27, height: 27, child: Center(child: icon)),
           const SizedBox(width: 9),
           Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
             style: TextStyle(fontWeight: FontWeight.w600, color: selected ? const Color(0xFF3157C8) : Colors.black87))),
