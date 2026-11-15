@@ -31,6 +31,21 @@ jobs:
       - name: Generate Android platform files
         run: flutter create --platforms=android --org com.moviefox --project-name moviefox .
 
+      - name: Add release internet permission
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('android/app/src/main/AndroidManifest.xml')
+          content = path.read_text()
+          permission = '    <uses-permission android:name="android.permission.INTERNET" />\\n'
+          if 'android.permission.INTERNET' not in content:
+              content = content.replace('    <application', permission + '    <application', 1)
+          if 'android.permission.INTERNET' not in content:
+              raise SystemExit('Could not add INTERNET permission to release manifest')
+          path.write_text(content)
+          print('Verified INTERNET permission in release manifest')
+          PY
+
       - name: Resolve dependencies
         run: flutter pub get
 
