@@ -939,19 +939,44 @@ class FreeReelsAdapter extends Adapter {
     if (query.isEmpty) return const FreeReelsSearchPageResult([], false, null);
     final key = '${p.id}|$query';
     final next = cursor ?? '';
-    final data = _data(await _request('/frv2-api/search/drama', body: {
+    final response = await _request('/frv2-api/search/drama', body: {
       'keyword': query, 'audio_tab_key': 'mix', 'next': next,
-    }));
-    final raw = data['items'] ?? data['drama_list'] ?? data['search_items'];
-    final pageInfo = data['page_info'] is Map ? data['page_info'] as Map : const {};
-    final nextValue = pageInfo['next'] ?? data['next'] ?? data['next_cursor'] ?? data['nextCursor'];
-    final nextCursor = nextValue == null ? null : nextValue.toString();
+    });
+    final data = _data(response);
+    final raw = data['items'] ?? data['drama_list'] ?? data['search_items'] ??
+        data['list'] ?? data['results'];
+    final pageInfo = data['page_info'] is Map ? data['page_info'] as Map :
+        data['pageInfo'] is Map ? data['pageInfo'] as Map :
+        data['pagination'] is Map ? data['pagination'] as Map : const {};
+    final nextValue = pageInfo['next'] ?? pageInfo['next_cursor'] ??
+        pageInfo['nextCursor'] ?? pageInfo['cursor'] ??
+        data['next'] ?? data['next_cursor'] ?? data['nextCursor'] ??
+        data['next_page_token'];
+    final rawItems = _list(raw);
+    final items = rawItems.whereType<Map>().map((x) => _item(p, x))
+        .whereType<Item>().where((x) => x.id.isNotEmpty).toList();
+    final explicitMore = pageInfo['has_more'] ?? pageInfo['hasMore'] ??
+        pageInfo['has_next'] ?? data['has_more'] ?? data['hasMore'] ??
+        data['has_next'] ?? data['hasNext'];
+    final bool moreFlag = explicitMore == true ||
+        explicitMore?.toString().toLowerCase() == 'true' ||
+        explicitMore?.toString() == '1';
+    String? nextCursor = nextValue == null || nextValue.toString().isEmpty
+        ? null : nextValue.toString();
+    // Some Free Reels search responses omit page_info but return a full page.
+    // Use the accumulated offset as the next token in that response shape.
+    if (nextCursor == null && rawItems.length >= 20 &&
+        (explicitMore == null || moreFlag)) {
+      final previousCount = int.tryParse(next) ?? 0;
+      nextCursor = (previousCount + rawItems.length).toString();
+    }
     _searchCursors[key] = nextCursor;
-    final items = _list(raw).whereType<Map>().map((x) => _item(p, x))
-      .whereType<Item>().where((x) => x.id.isNotEmpty).toList();
-    return FreeReelsSearchPageResult(items, nextCursor != null && nextCursor.isNotEmpty, nextCursor);
+    return FreeReelsSearchPageResult(
+      items,
+      nextCursor != null && nextCursor.isNotEmpty && (explicitMore == null || moreFlag),
+      nextCursor,
+    );
   }
-
   @override
   Future<List<Item>> search(ProviderDef p, String q) async =>
       (await searchPage(p, q)).items;
