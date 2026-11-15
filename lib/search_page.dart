@@ -28,6 +28,7 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
   static double _savedOffset = 0;
   static bool _savedHasMore = false;
   static int _savedPage = 1;
+  static String? _savedSearchCursor;
 
   final _ctrl = TextEditingController();
   late final ScrollController _scroll;
@@ -37,6 +38,7 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
   bool _loadingMore = false;
   bool _hasMore = false;
   int _page = 1;
+  String? _searchCursor;
   String _query = '';
   List<_Group> _groups = const [];
   List<String> _suggestions = const [];
@@ -53,6 +55,7 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
     _suggestions = _savedSuggestions;
     _hasMore = _savedHasMore;
     _page = _savedPage;
+    _searchCursor = _savedSearchCursor;
     _scroll = ScrollController(initialScrollOffset: _savedOffset);
     _scroll.addListener(_saveSession);
   }
@@ -63,6 +66,7 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
     _savedSuggestions = _suggestions;
     _savedHasMore = _hasMore;
     _savedPage = _page;
+    _savedSearchCursor = _searchCursor;
     if (_scroll.hasClients) _savedOffset = _scroll.offset;
   }
 
@@ -142,6 +146,7 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
       _loadingMore = false;
       _page = 1;
       _hasMore = false;
+      _searchCursor = null;
     });
     final ps = app.scope();
     final groups = await Future.wait(ps.map((p) async {
@@ -158,6 +163,14 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
           final page = await StoryTvAdapter().searchPage(p, q, page: 0);
           if (mounted && my == _token) {
             _page = 0;
+            _hasMore = page.hasMore;
+          }
+          return _Group(p, page.items, null);
+        }
+        if (p.kind == 'freereels') {
+          final page = await FreeReelsAdapter().searchPage(p, q);
+          if (mounted && my == _token) {
+            _searchCursor = page.nextCursor;
             _hasMore = page.hasMore;
           }
           return _Group(p, page.items, null);
@@ -182,7 +195,7 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
   }
 
   Future<void> _loadMore() async {
-    final matches = app.scope().where((x) => x.kind == 'moviebox' || x.kind == 'storytv').toList();
+    final matches = app.scope().where((x) => x.kind == 'moviebox' || x.kind == 'storytv' || x.kind == 'freereels').toList();
     if (matches.isEmpty) return;
     final p = matches.first;
     setState(() => _loadingMore = true);
@@ -192,6 +205,11 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
       if (p.kind == 'storytv') {
         final page = await StoryTvAdapter().searchPage(p, _query, page: _page + 1);
         nextItems = page.items;
+        moreAvailable = page.hasMore;
+      } else if (p.kind == 'freereels') {
+        final page = await FreeReelsAdapter().searchPage(p, _query, cursor: _searchCursor);
+        nextItems = page.items;
+        _searchCursor = page.nextCursor;
         moreAvailable = page.hasMore;
       } else {
         final page = await MovieBoxAdapter().searchPage(p, _query, page: _page + 1);
@@ -244,6 +262,8 @@ class _SearchPageState extends State<SearchPage> with AutomaticKeepAliveClientMi
             onChanged: _onChanged,
             onSubmitted: _search,
             textInputAction: TextInputAction.search,
+            textAlign: TextAlign.center,
+            textAlignVertical: TextAlignVertical.center,
             decoration: InputDecoration(
               hintText: 'Search movies and shows',
               filled: true,
