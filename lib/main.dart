@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'downloads_page.dart';
 import 'downloads_service.dart';
 import 'home_page.dart';
+import 'music_page.dart';
 import 'search_page.dart';
 import 'settings_page.dart';
 import 'store.dart';
@@ -38,24 +39,153 @@ class MovieFoxShell extends StatefulWidget {
 
 class _MovieFoxShellState extends State<MovieFoxShell> {
   int _page = 0;
-  late final List<Widget> _pages = const [HomePage(), SearchPage(), DownloadsPage(), SettingsPage()];
+  final List<int> _pageHistory = [];
+  late final List<Widget> _pages = const [HomePage(), SearchPage(), DownloadsPage(), SettingsPage(), MusicPage()];
+
   @override
   void initState() {
     super.initState();
-    DownloadService.instance.onOpenDownloads = () { if (mounted) setState(() => _page = 2); };
+    DownloadService.instance.onOpenDownloads = () => _goToPage(2);
   }
+
+  void _goToPage(int next) {
+    if (_page == next) return;
+    setState(() {
+      _pageHistory.add(_page);
+      _page = next;
+    });
+  }
+
+  Future<bool> _handleBack() async {
+    if (_pageHistory.isNotEmpty) {
+      setState(() => _page = _pageHistory.removeLast());
+      return false;
+    }
+    if (_page != 0) {
+      setState(() => _page = 0);
+      return false;
+    }
+    return true;
+  }
+
+  IconData _providerIcon(String kind) => switch (kind) {
+    'moviebox' => Icons.movie_creation_outlined,
+    'storytv' => Icons.smart_display_outlined,
+    'freereels' => Icons.video_library_outlined,
+    _ => Icons.extension_outlined,
+  };
+
+  void _chooseProvider(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: false,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(bottom: 14),
+                child: Text('Choose provider', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              ),
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 2.7,
+                children: [
+                  for (final provider in app.enabled)
+                    _ProviderChoice(
+                      name: provider.name,
+                      icon: _providerIcon(provider.kind),
+                      selected: _page != 4 && app.active == provider.id,
+                      onTap: () {
+                        app.setActive(provider.id);
+                        Navigator.pop(sheetContext);
+                        if (_page != 0) setState(() { _pageHistory.add(_page); _page = 0; });
+                      },
+                    ),
+                  _ProviderChoice(
+                    name: 'JioSaavn',
+                    icon: Icons.music_note_rounded,
+                    selected: _page == 4,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _goToPage(4);
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      titleSpacing: 16,
-      title: const Text('MovieFox', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -.4)),
-      actions: [
-        IconButton(tooltip: 'Search', onPressed: () => setState(() => _page = 1), icon: const Icon(Icons.search)),
-        IconButton(tooltip: 'Downloads', onPressed: () => setState(() => _page = 2), icon: const Icon(Icons.download_outlined)),
-        IconButton(tooltip: 'Settings', onPressed: () => setState(() => _page = 3), icon: const Icon(Icons.settings_outlined)),
-        const SizedBox(width: 4),
-      ],
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: app,
+    builder: (context, _) => WillPopScope(
+      onWillPop: _handleBack,
+      child: Scaffold(
+        appBar: AppBar(
+          titleSpacing: 16,
+          title: InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: () => _chooseProvider(context),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Flexible(child: Text(_page == 4 ? 'JioSaavn' : app.scopeName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: -.4))),
+                const SizedBox(width: 5),
+                const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+              ]),
+            ),
+          ),
+          actions: [
+            IconButton(tooltip: 'Search', onPressed: () => _goToPage(1), icon: const Icon(Icons.search)),
+            IconButton(tooltip: 'Downloads', onPressed: () => _goToPage(2), icon: const Icon(Icons.download_outlined)),
+            IconButton(tooltip: 'Settings', onPressed: () => _goToPage(3), icon: const Icon(Icons.settings_outlined)),
+            const SizedBox(width: 4),
+          ],
+        ),
+        body: IndexedStack(index: _page, children: _pages),
+      ),
     ),
-    body: IndexedStack(index: _page, children: _pages),
+  );
+}
+
+class _ProviderChoice extends StatelessWidget {
+  const _ProviderChoice({required this.name, required this.icon, required this.selected, required this.onTap});
+  final String name;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: selected ? const Color(0xFFEAF0FF) : const Color(0xFFF5F6F8),
+    borderRadius: BorderRadius.circular(12),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(children: [
+          Icon(icon, size: 22, color: selected ? const Color(0xFF3157C8) : Colors.black87),
+          const SizedBox(width: 9),
+          Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontWeight: FontWeight.w600, color: selected ? const Color(0xFF3157C8) : Colors.black87))),
+          if (selected) const Icon(Icons.check_circle, size: 16, color: Color(0xFF3157C8)),
+        ]),
+      ),
+    ),
   );
 }
