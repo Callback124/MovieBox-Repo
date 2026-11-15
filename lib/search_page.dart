@@ -6,6 +6,8 @@ import 'models.dart';
 import 'providers.dart';
 import 'store.dart';
 import 'widgets.dart';
+import 'jiosaavn_service.dart';
+import 'music_page.dart';
 
 class _Group {
   _Group(this.provider, this.items, this.error);
@@ -34,11 +36,21 @@ class SearchPageState extends State<SearchPage> {
   String _query = '';
   List<_Group> _groups = const [];
   List<String> _suggestions = const [];
+  bool _saavnMode = false;
+  int _saavnTab = 0;
+  List<SaavnSong> _saavnSongs = [];
+  List<Map<String, dynamic>> _saavnMedia = [];
 
   @override
   void initState() {
     super.initState();
     _scroll = ScrollController();
+  }
+
+  void setSaavnMode(bool value) {
+    _saavnMode = value;
+    resetSearch();
+    _saavnTab = 0;
   }
 
   void resetSearch() {
@@ -48,6 +60,8 @@ class SearchPageState extends State<SearchPage> {
     _query = '';
     _groups = const [];
     _suggestions = const [];
+    _saavnSongs = [];
+    _saavnMedia = [];
     _loading = false;
     _loadingMore = false;
     _hasMore = false;
@@ -114,6 +128,26 @@ class SearchPageState extends State<SearchPage> {
 
   Future<void> _search(String raw) async {
     final q = raw.trim();
+    if (_saavnMode) {
+      final my = ++_token;
+      if (q.isEmpty) { setState(() { _query = ''; _saavnSongs = []; _saavnMedia = []; _loading = false; }); return; }
+      setState(() { _query = q; _loading = true; _saavnSongs = []; _saavnMedia = []; });
+      try {
+        if (_saavnTab == 0) {
+          final result = await JioSaavnPlayer.instance.api.searchSongs(q);
+          if (!mounted || my != _token) return;
+          setState(() { _saavnSongs = result; _loading = false; });
+        } else {
+          final kind = ['songs', 'albums', 'playlists', 'artists'][_saavnTab];
+          final result = await JioSaavnPlayer.instance.api.searchMedia(kind, q);
+          if (!mounted || my != _token) return;
+          setState(() { _saavnMedia = result; _loading = false; });
+        }
+      } catch (e) {
+        if (mounted && my == _token) { setState(() => _loading = false); toast(context, 'JioSaavn search failed: $e'); }
+      }
+      return;
+    }
     final my = ++_token;
     if (q.isEmpty) {
       setState(() {
@@ -227,6 +261,80 @@ class SearchPageState extends State<SearchPage> {
     }
   }
 
+  Widget _saavnSongGrid(List<SaavnSong> songs) => SliverPadding(
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+    sliver: SliverGrid.builder(
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 190, childAspectRatio: .82,
+        crossAxisSpacing: 12, mainAxisSpacing: 14,
+      ),
+      itemCount: songs.length,
+      itemBuilder: (context, i) {
+        final song = songs[i];
+        return InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () async {
+            try {
+              await JioSaavnPlayer.instance.playList(songs, start: i);
+              if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const SaavnFullPlayer()));
+            } catch (e) { if (context.mounted) toast(context, 'Playback failed: $e'); }
+          },
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox.expand(
+              child: song.image.isEmpty ? const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42))
+                : Image.network(song.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42))),
+            ))),
+            const SizedBox(height: 7),
+            Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ]),
+        );
+      },
+    ),
+  );
+
+  Widget _saavnMediaGrid(List<Map<String, dynamic>> items) => SliverPadding(
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+    sliver: SliverGrid.builder(
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 190, childAspectRatio: .82,
+        crossAxisSpacing: 12, mainAxisSpacing: 14,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, i) {
+        final item = items[i];
+        final image = (item['image'] ?? item['album_image'] ?? '').toString().replaceAll('150x150', '500x500').replaceAll('50x50', '500x500').replaceAll('http://', 'https://');
+        final title = saavnClean(item['title'] ?? item['name'] ?? 'Music');
+        final subtitle = saavnClean(item['subtitle'] ?? item['type'] ?? item['artist'] ?? '');
+        return InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            if (_saavnTab == 3) {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => SaavnArtistPage(item: item)));
+            } else if (_saavnTab == 1 || _saavnTab == 2) {
+              showModalBottomSheet<void>(context: context, isScrollControlled: true, showDragHandle: true,
+                builder: (_) => SaavnTracklistSheet(item: item, playlist: _saavnTab == 2));
+            } else {
+              final song = SaavnSong.fromJson(item);
+              JioSaavnPlayer.instance.playList([song]).then((_) {
+                if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const SaavnFullPlayer()));
+              }).catchError((e) { if (context.mounted) toast(context, 'Playback failed: $e'); });
+            }
+          },
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox.expand(
+              child: image.isEmpty ? const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42))
+                : Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42))),
+            ))),
+            const SizedBox(height: 7),
+            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+            if (subtitle.isNotEmpty) Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ]),
+        );
+      },
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
 
@@ -251,7 +359,7 @@ class SearchPageState extends State<SearchPage> {
             textAlign: TextAlign.center,
             textAlignVertical: TextAlignVertical.center,
             decoration: InputDecoration(
-              hintText: 'Search movies and shows',
+              hintText: _saavnMode ? 'Search songs, albums, artists' : 'Search movies and shows',
               filled: true,
               contentPadding: EdgeInsets.zero,
               border: OutlineInputBorder(
@@ -259,7 +367,11 @@ class SearchPageState extends State<SearchPage> {
             ),
           ),
         ),
-        if (_suggestions.isNotEmpty && _query.isEmpty)
+        if (_saavnMode)
+          SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 12), child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+            for (var i = 0; i < 4; i++) Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text(['Songs', 'Albums', 'Playlists', 'Artists'][i]), selected: _saavnTab == i, showCheckmark: false, onSelected: (_) { setState(() { _saavnTab = i; _saavnSongs = []; _saavnMedia = []; }); if (_query.isNotEmpty) _search(_query); }))
+          ])))),
+        if (_suggestions.isNotEmpty && _query.isEmpty && !_saavnMode)
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -281,6 +393,10 @@ class SearchPageState extends State<SearchPage> {
               padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator()))
         else if (_query.isEmpty)
           const SliverToBoxAdapter(child: SizedBox.shrink())
+        else if (_saavnMode && _saavnTab == 0)
+          _saavnSongGrid(_saavnSongs)
+        else if (_saavnMode)
+          _saavnMediaGrid(_saavnMedia)
         else if (nothing)
           SliverToBoxAdapter(
               child: EmptyState(

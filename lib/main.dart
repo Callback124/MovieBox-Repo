@@ -164,7 +164,7 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
             ),
           ),
           actions: [
-            IconButton(tooltip: 'Search', onPressed: () => _goToPage(1), icon: const Icon(Icons.search)),
+            IconButton(tooltip: 'Search', onPressed: () { _searchKey.currentState?.setSaavnMode(_page == 5); _goToPage(1); }, icon: const Icon(Icons.search)),
             IconButton(tooltip: 'Downloads', onPressed: () => _goToPage(2), icon: const Icon(Icons.download_outlined)),
             IconButton(tooltip: 'Watch history', onPressed: () => _goToPage(3), icon: const Icon(Icons.history_rounded)),
             IconButton(tooltip: 'Settings', onPressed: () => _goToPage(4), icon: const Icon(Icons.settings_outlined)),
@@ -198,7 +198,6 @@ class _ProviderChoice extends StatelessWidget {
           const SizedBox(width: 9),
           Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
             style: TextStyle(fontWeight: FontWeight.w600, color: selected ? const Color(0xFF3157C8) : Colors.black87))),
-          if (selected) const Icon(Icons.check_circle, size: 16, color: Color(0xFF3157C8)),
         ]),
       ),
     ),
