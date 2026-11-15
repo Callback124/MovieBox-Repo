@@ -193,13 +193,6 @@ class _DetailPageState extends State<DetailPage> {
                                 d, eps.isEmpty ? null : (_lastEp(d) ?? eps.first)),
                         child: Text(loading ? 'Loading…' : 'Watch'),
                       ),
-                      OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: () => app.toggleLibrary(d),
-                        child: const Text('Library'),
-                      ),
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
