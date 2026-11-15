@@ -139,7 +139,7 @@ class _MusicPageState extends State<MusicPage> {
 
   Widget _section(SaavnSection s)=>Padding(padding:const EdgeInsets.only(bottom:20),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
     Padding(padding:const EdgeInsets.fromLTRB(16,0,16,10),child:Text(s.title,style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold))),
-    SizedBox(height:188,child:ListView.builder(scrollDirection:Axis.horizontal,padding:const EdgeInsets.symmetric(horizontal:16),itemCount:s.items.length,itemBuilder:(context,i){final m=s.items[i];final image=img(m);return GestureDetector(onTap:()=>s.title.toLowerCase().contains('genres')? _searchGenre(saavnClean(m['title']??m['name']??'')) : open(m),child:SizedBox(width:136,child:Padding(padding:const EdgeInsets.only(right:12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    SizedBox(height:206,child:ListView.builder(scrollDirection:Axis.horizontal,padding:const EdgeInsets.symmetric(horizontal:16),itemCount:s.items.length,itemBuilder:(context,i){final m=s.items[i];final image=img(m);return GestureDetector(onTap:()=>s.title.toLowerCase().contains('genres')? _searchGenre(saavnClean(m['title']??m['name']??'')) : open(m),child:SizedBox(width:146,child:Padding(padding:const EdgeInsets.only(right:12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       ClipRRect(borderRadius:BorderRadius.circular(12),child:AspectRatio(aspectRatio:1,child:image.isEmpty?const ColoredBox(color:Colors.black12,child:Icon(Icons.music_note)):Image.network(image,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.music_note)))),
       const SizedBox(height:7),Text(saavnClean(m['title']??m['name']??'Music'),maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w600,fontSize:13)),
     ]))));})),
@@ -207,7 +207,27 @@ class _SaavnTracklistSheetState extends State<SaavnTracklistSheet>{
   @override Widget build(BuildContext context)=>SafeArea(child:SizedBox(height:MediaQuery.sizeOf(context).height*.82,child:FutureBuilder<List<SaavnSong>>(future:future,builder:(context,snap){final rows=snap.data??[];return Column(children:[
     Padding(padding:const EdgeInsets.all(16),child:Row(children:[ClipRRect(borderRadius:BorderRadius.circular(10),child:Image.network((widget.item['image']??'').toString().replaceAll('150x150','500x500'),width:82,height:82,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.album,size:60))),const SizedBox(width:14),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(saavnClean(widget.item['title']??widget.item['name']??'Music collection'),style:Theme.of(context).textTheme.titleLarge),Text(rows.length.toString()+' songs')]))])),
     Row(children:[const SizedBox(width:16),FilledButton.icon(onPressed:rows.isEmpty?null:()=>_playSaavnAndOpen(context,rows),icon:const Icon(Icons.play_arrow),label:const Text('Play all')),const SizedBox(width:8),OutlinedButton.icon(onPressed:rows.isEmpty?null:(){final shuffled=[...rows]..shuffle();_playSaavnAndOpen(context,shuffled);},icon:const Icon(Icons.shuffle),label:const Text('Shuffle'))]),
-    if(snap.connectionState==ConnectionState.waiting)const Expanded(child:Center(child:CircularProgressIndicator()))else if(snap.hasError)Expanded(child:Center(child:Text('Tracklist failed: '+snap.error.toString())))else Expanded(child:ListView.builder(itemCount:rows.length,itemBuilder:(context,i)=>ListTile(leading:Text((i+1).toString()),title:Text(rows[i].title),subtitle:Text(rows[i].artist),onTap:()=>_playSaavnAndOpen(context,rows,start:i),trailing:PopupMenuButton<String>(onSelected:(v){if(v=='download')_downloadSaavn(context,rows[i]);},itemBuilder:(_)=>const [PopupMenuItem(value:'download',child:Text('Download'))])))),
+    if(snap.connectionState==ConnectionState.waiting)const Expanded(child:Center(child:CircularProgressIndicator()))else if(snap.hasError)Expanded(child:Center(child:Text('Tracklist failed: '+snap.error.toString())))else Expanded(child:GridView.builder(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 18),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .92),
+      itemCount: rows.length,
+      itemBuilder: (context, i) {
+        final song = rows[i];
+        return InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _playSaavnAndOpen(context, rows, start: i),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(10), child: SizedBox.expand(
+              child: song.image.isEmpty ? const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 38))
+                : Image.network(song.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 38))),
+            ))),
+            const SizedBox(height: 6),
+            Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+          ]),
+        );
+      },
+    )),
   ]);})));
 }
 class SaavnArtistPage extends StatefulWidget{
@@ -223,9 +243,25 @@ class _SaavnArtistPageState extends State<SaavnArtistPage>{
     return ListView(children:[
       Padding(padding:const EdgeInsets.all(22),child:Column(children:[CircleAvatar(radius:58,backgroundImage:NetworkImage((widget.item['image']??'').toString().replaceAll('150x150','500x500'))),const SizedBox(height:12),Text(saavnClean(widget.item['name']??widget.item['title']),style:Theme.of(context).textTheme.headlineSmall),Text((widget.item['follower_count']??widget.item['fan_count']??'').toString()+' Fans'),FilledButton.icon(onPressed:songs.isEmpty?null:()=>_playSaavnAndOpen(context,songs),icon:const Icon(Icons.play_arrow),label:const Text('Play all'))])),
       const Padding(padding:EdgeInsets.all(16),child:Text('Top Songs',style:TextStyle(fontWeight:FontWeight.bold,fontSize:19))),
-      for(final s in songs)ListTile(title:Text(s.title),subtitle:Text(s.artist),onTap:()=>_playSaavnAndOpen(context,songs,start:songs.indexOf(s))),
+      if (songs.isNotEmpty) Padding(padding: const EdgeInsets.symmetric(horizontal: 14), child: GridView.builder(
+        shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .92),
+        itemCount: songs.length,
+        itemBuilder: (context, i) { final song = songs[i]; return InkWell(onTap: () => _playSaavnAndOpen(context, songs, start: i), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(10), child: SizedBox.expand(child: Image.network(song.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 38)))))),
+          const SizedBox(height: 6), Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)), Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+        ])); },
+      )),
       const Padding(padding:EdgeInsets.all(16),child:Text('Top Albums',style:TextStyle(fontWeight:FontWeight.bold,fontSize:19))),
-      if(albums is List)for(final item in albums.whereType<Map>())ListTile(title:Text(saavnClean(item['title']??item['name'])),subtitle:const Text('Album'),onTap:()=>showModalBottomSheet<void>(context:context,isScrollControlled:true,showDragHandle:true,builder:(_)=>SaavnTracklistSheet(item:Map<String,dynamic>.from(item),playlist:false))),
+      if(albums is List) Padding(padding: const EdgeInsets.symmetric(horizontal: 14), child: GridView.builder(
+        shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .92),
+        itemCount: albums.whereType<Map>().length,
+        itemBuilder: (context, i) { final item = Map<String,dynamic>.from(albums.whereType<Map>().elementAt(i)); final image = img(item); return InkWell(onTap: () => showModalBottomSheet<void>(context:context,isScrollControlled:true,showDragHandle:true,builder:(_)=>SaavnTracklistSheet(item:item,playlist:false)), child: Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Expanded(child:ClipRRect(borderRadius:BorderRadius.circular(10),child:SizedBox.expand(child:image.isEmpty?const ColoredBox(color:Color(0xFFF1F2F4),child:Icon(Icons.album,size:38)):Image.network(image,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.album))))),
+          const SizedBox(height:6),Text(saavnClean(item['title']??item['name']??'Album'),maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w700)),const Text('Album',style:TextStyle(fontSize:12)),
+        ])); },
+      )),
     ]);
   }));
 }
