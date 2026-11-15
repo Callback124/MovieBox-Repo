@@ -60,7 +60,7 @@ jobs:
               if not match:
                   raise SystemExit(f'Missing {style} in styles.xml')
               if 'windowLayoutInDisplayCutoutMode' not in match.group(2):
-                  content = content[:match.start()] + match.group(1) + match.group(2) + '\\n' + item + '\\n' + match.group(3) + content[match.end():]
+                  content = content[:match.start()] + match.group(1) + match.group(2) + '\n' + item + '\n' + match.group(3) + content[match.end():]
           path.write_text(content)
           print('Enabled short-edge display cutout layout for fullscreen playback')
           PY
