@@ -235,6 +235,7 @@ class SaavnArtistPage extends StatefulWidget{
   @override State<SaavnArtistPage> createState()=>_SaavnArtistPageState();
 }
 class _SaavnArtistPageState extends State<SaavnArtistPage>{
+  String img(Map m)=>(m['image']??m['album_image']??'').toString().replaceAll('150x150','500x500').replaceAll('50x50','500x500').replaceAll('http://','https://');
   late Future<dynamic> future;
   @override void initState(){super.initState();future=JioSaavnPlayer.instance.api.call('artist.getArtistPageDetails',{'artistId':(widget.item['artistid']??widget.item['id']??'').toString(),'n_song':'50','n_album':'50'});}
   @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:Text(saavnClean(widget.item['name']??widget.item['title']??'Artist'))),body:FutureBuilder<dynamic>(future:future,builder:(context,snap){
