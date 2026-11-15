@@ -31,6 +31,20 @@ jobs:
       - name: Generate Android platform files
         run: flutter create --platforms=android --org com.moviefox --project-name moviefox .
 
+      - name: Set Android launcher name to MovieFox
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path('android/app/src/main/AndroidManifest.xml')
+          content = path.read_text()
+          updated, count = re.subn(r'android:label="[^"]*"', 'android:label="MovieFox"', content, count=1)
+          if count != 1:
+              raise SystemExit('Could not set Android launcher label to MovieFox')
+          path.write_text(updated)
+          print('Verified launcher label: MovieFox')
+          PY
+
       - name: Add release internet permission
         run: |
           python3 - <<'PY'
