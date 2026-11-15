@@ -4,7 +4,6 @@ import 'player_page.dart';
 import 'providers.dart';
 import 'store.dart';
 import 'widgets.dart';
-import 'music_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -31,26 +30,6 @@ class _HomePageState extends State<HomePage> {
         return CustomScrollView(
           controller: _scrollController,
           slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: Row(children: [
-                  Expanded(child: OutlinedButton.icon(
-                    onPressed: () => _pickScope(context),
-                    icon: const Icon(Icons.dns_outlined),
-                    label: Text('Provider: ${app.scopeName}'),
-                    style: OutlinedButton.styleFrom(shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(4)))),
-                  )),
-                  const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MusicPage())),
-                    icon: const Icon(Icons.music_note),
-                    label: const Text('JioSaavn'),
-                    style: OutlinedButton.styleFrom(shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(4)))),
-                  ),
-                ]),
-              ),
-            ),
             const SliverToBoxAdapter(child: _ContinueWatching()),
             if (ps.isEmpty)
               SliverToBoxAdapter(
@@ -65,7 +44,7 @@ class _HomePageState extends State<HomePage> {
                 itemBuilder: (context, i) => _ProviderSection(
                   key: ValueKey(ps[i].id),
                   provider: ps[i],
-                  showName: ps.length > 1,
+                  showName: false,
                   scrollController: _scrollController,
                 ),
               ),
@@ -76,30 +55,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _pickScope(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            for (final p in app.enabled)
-              RadioListTile<String>(
-                value: p.id,
-                groupValue: app.active,
-                title: Text(p.name),
-                subtitle: Text(p.kindLabel),
-                onChanged: (v) {
-                  app.setActive(p.id);
-                  Navigator.pop(ctx);
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _ProviderSection extends StatefulWidget {
