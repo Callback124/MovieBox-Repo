@@ -760,6 +760,13 @@ class FreeReelsEpisode {
   final bool unlock;
 }
 
+class FreeReelsSearchPageResult {
+  const FreeReelsSearchPageResult(this.items, this.hasMore, this.nextCursor);
+  final List<Item> items;
+  final bool hasMore;
+  final String? nextCursor;
+}
+
 class FreeReelsAdapter extends Adapter {
   static const _base = 'https://apiv2.free-reels.com';
   static const _headers = <String, String>{
@@ -782,6 +789,7 @@ class FreeReelsAdapter extends Adapter {
   static final Map<String, List<FreeReelsEpisode>> _episodes = {};
   static final Map<String, String> _moduleKeys = {};
   static final Map<String, String?> _cursors = {};
+  static final Map<String, String?> _searchCursors = {};
 
   Future<dynamic> _request(String path, {Map<String, dynamic>? body}) async {
     final request = body == null
@@ -926,16 +934,27 @@ class FreeReelsAdapter extends Adapter {
       .where((x) => x.isNotEmpty).take(8).toList();
   }
 
-  @override
-  Future<List<Item>> search(ProviderDef p, String q) async {
-    if (q.trim().isEmpty) return [];
+  Future<FreeReelsSearchPageResult> searchPage(ProviderDef p, String q, {String? cursor}) async {
+    final query = q.trim();
+    if (query.isEmpty) return const FreeReelsSearchPageResult([], false, null);
+    final key = '${p.id}|$query';
+    final next = cursor ?? '';
     final data = _data(await _request('/frv2-api/search/drama', body: {
-      'keyword': q.trim(), 'audio_tab_key': 'mix', 'next': '',
+      'keyword': query, 'audio_tab_key': 'mix', 'next': next,
     }));
     final raw = data['items'] ?? data['drama_list'] ?? data['search_items'];
-    return _list(raw).whereType<Map>().map((x) => _item(p, x))
+    final pageInfo = data['page_info'] is Map ? data['page_info'] as Map : const {};
+    final nextValue = pageInfo['next'] ?? data['next'] ?? data['next_cursor'] ?? data['nextCursor'];
+    final nextCursor = nextValue == null ? null : nextValue.toString();
+    _searchCursors[key] = nextCursor;
+    final items = _list(raw).whereType<Map>().map((x) => _item(p, x))
       .whereType<Item>().where((x) => x.id.isNotEmpty).toList();
+    return FreeReelsSearchPageResult(items, nextCursor != null && nextCursor.isNotEmpty, nextCursor);
   }
+
+  @override
+  Future<List<Item>> search(ProviderDef p, String q) async =>
+      (await searchPage(p, q)).items;
 }
 
 /* ---------- Stremio-compatible addons ---------- */
