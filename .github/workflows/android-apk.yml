@@ -46,6 +46,25 @@ jobs:
           print('Verified INTERNET permission in release manifest')
           PY
 
+      - name: Enable fullscreen content in display cutouts
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path('android/app/src/main/res/values/styles.xml')
+          content = path.read_text()
+          item = '        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>'
+          for style in ('LaunchTheme', 'NormalTheme'):
+              pattern = rf'(<style name="{style}"[^>]*>)(.*?)(</style>)'
+              match = re.search(pattern, content, re.S)
+              if not match:
+                  raise SystemExit(f'Missing {style} in styles.xml')
+              if 'windowLayoutInDisplayCutoutMode' not in match.group(2):
+                  content = content[:match.start()] + match.group(1) + match.group(2) + '\\n' + item + '\\n' + match.group(3) + content[match.end():]
+          path.write_text(content)
+          print('Enabled short-edge display cutout layout for fullscreen playback')
+          PY
+
       - name: Resolve dependencies
         run: flutter pub get
 

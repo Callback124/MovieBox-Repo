@@ -72,7 +72,7 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void initState() {
     super.initState();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    _enterImmersive();
     SystemChrome.setSystemUIChangeCallback((visible) async {
       if (visible) await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     });
@@ -81,6 +81,17 @@ class _PlayerPageState extends State<PlayerPage> {
     } else {
       _setup();
     }
+  }
+
+  void _enterImmersive() {
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarIconBrightness: Brightness.light,
+      systemNavigationBarDividerColor: Colors.transparent,
+    ));
+    unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky));
   }
 
   List<Episode> get _episodeSequence {
@@ -278,6 +289,7 @@ class _PlayerPageState extends State<PlayerPage> {
       await SystemChrome.setPreferredOrientations(isLandscape
           ? const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
           : const [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+      _enterImmersive();
       await controller.setLooping(false);
       await controller.setPlaybackSpeed(_rate);
       if (_startAt != null) {
@@ -327,6 +339,7 @@ class _PlayerPageState extends State<PlayerPage> {
       await SystemChrome.setPreferredOrientations(landscape
           ? const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
           : const [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+      _enterImmersive();
       await controller.setLooping(false);
       await controller.setPlaybackSpeed(_rate);
       _transitioning = false;
@@ -942,7 +955,9 @@ class _PlayerPageState extends State<PlayerPage> {
     if (controller != null) {
       unawaited(controller.dispose());
     }
+    SystemChrome.setSystemUIChangeCallback(null);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark);
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.dispose();
   }

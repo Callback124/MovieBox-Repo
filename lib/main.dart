@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'downloads_page.dart';
 import 'downloads_service.dart';
 import 'home_page.dart';
+import 'history_page.dart';
 import 'music_page.dart';
 import 'search_page.dart';
 import 'settings_page.dart';
@@ -40,7 +41,7 @@ class MovieFoxShell extends StatefulWidget {
 class _MovieFoxShellState extends State<MovieFoxShell> {
   int _page = 0;
   final List<int> _pageHistory = [];
-  late final List<Widget> _pages = const [HomePage(), SearchPage(), DownloadsPage(), SettingsPage(), MusicPage()];
+  late final List<Widget> _pages = const [HomePage(), SearchPage(), DownloadsPage(), HistoryPage(), SettingsPage(), MusicPage()];
 
   @override
   void initState() {
@@ -103,7 +104,7 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
                     _ProviderChoice(
                       name: provider.name,
                       icon: _providerIcon(provider.kind),
-                      selected: _page != 4 && app.active == provider.id,
+                      selected: _page != 5 && app.active == provider.id,
                       onTap: () {
                         app.setActive(provider.id);
                         Navigator.pop(sheetContext);
@@ -113,10 +114,10 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
                   _ProviderChoice(
                     name: 'JioSaavn',
                     icon: Icons.music_note_rounded,
-                    selected: _page == 4,
+                    selected: _page == 5,
                     onTap: () {
                       Navigator.pop(sheetContext);
-                      _goToPage(4);
+                      _goToPage(5);
                     },
                   ),
                 ],
@@ -141,14 +142,15 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
             onTap: () => _chooseProvider(context),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
-              child: Text(_page == 4 ? 'JioSaavn' : app.scopeName, maxLines: 1, overflow: TextOverflow.ellipsis,
+              child: Text(_page == 5 ? 'JioSaavn' : app.scopeName, maxLines: 1, overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: -.4)),
             ),
           ),
           actions: [
             IconButton(tooltip: 'Search', onPressed: () => _goToPage(1), icon: const Icon(Icons.search)),
             IconButton(tooltip: 'Downloads', onPressed: () => _goToPage(2), icon: const Icon(Icons.download_outlined)),
-            IconButton(tooltip: 'Settings', onPressed: () => _goToPage(3), icon: const Icon(Icons.settings_outlined)),
+            IconButton(tooltip: 'Watch history', onPressed: () => _goToPage(3), icon: const Icon(Icons.history_rounded)),
+            IconButton(tooltip: 'Settings', onPressed: () => _goToPage(4), icon: const Icon(Icons.settings_outlined)),
             const SizedBox(width: 4),
           ],
         ),

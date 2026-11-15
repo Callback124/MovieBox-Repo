@@ -164,6 +164,7 @@ class AppState extends ChangeNotifier {
       }
     }
     _saveProgress();
+    progressRev.value++;
   }
 
   void removeProgress(Item item, Episode? ep) {
