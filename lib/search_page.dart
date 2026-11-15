@@ -85,6 +85,8 @@ class SearchPageState extends State<SearchPage> {
     setState(() {
       _query = '';
       _groups = const [];
+      _saavnSongs = [];
+      _saavnMedia = [];
       _loading = false;
       _loadingMore = false;
       _hasMore = false;
@@ -341,7 +343,9 @@ class SearchPageState extends State<SearchPage> {
     final multi = _groups.length > 1;
     final nothing = !_loading &&
         _query.isNotEmpty &&
-        _groups.every((g) => g.error == null && g.items.isEmpty);
+        (_saavnMode
+            ? (_saavnTab == 0 ? _saavnSongs.isEmpty : _saavnMedia.isEmpty)
+            : _groups.every((g) => g.error == null && g.items.isEmpty));
     return NotificationListener<ScrollNotification>(
       onNotification: (n) { if (n is ScrollUpdateNotification || n is ScrollMetricsNotification) _onScroll(); return false; },
       child: CustomScrollView(
