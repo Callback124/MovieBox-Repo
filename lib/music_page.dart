@@ -287,12 +287,12 @@ class _SaavnWaveformPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width <= 0 || size.height <= 0) return;
-    const count =  seventy;
+    const count = 70;
     final gap = size.width / count;
     final stroke = math.max(2.0, math.min(3.8, gap * .48));
     final center = size.height / 2;
     final played = Paint()..color = Colors.white..strokeWidth = stroke..strokeCap = StrokeCap.round;
-    final remaining = Paint()..color = Colors.white.withValues(alpha: .58)..strokeWidth = stroke..strokeCap = StrokeCap.round;
+    final remaining = Paint()..color = Colors.white.withOpacity(.58)..strokeWidth = stroke..strokeCap = StrokeCap.round;
     for (var i = 0; i < count; i++) {
       final x = gap * (i + .5);
       final wave = (math.sin(i * 1.71).abs() * .42) +
@@ -307,8 +307,6 @@ class _SaavnWaveformPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _SaavnWaveformPainter oldDelegate) => oldDelegate.progress != progress;
 
-  static const int seventy =  seventyValue;
-  static const int seventyValue = 70;
 }
 
 class SaavnFullPlayer extends StatefulWidget {
