@@ -11,8 +11,8 @@ import 'jiosaavn_service.dart';
 import 'search_page.dart';
 import 'settings_page.dart';
 import 'store.dart';
+import 'navigation_key.dart';
 
-final GlobalKey<NavigatorState> movieFoxNavigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
