@@ -66,13 +66,13 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
   }
 
   Future<bool> _handleBack() async {
-    if (_page == 5) return true;
-    if (_page == 0 && JioSaavnPlayer.instance.miniPlayerVisible.value) {
+    if ((_page == 0 || _page == 5) && JioSaavnPlayer.instance.miniPlayerVisible.value) {
       try {
         await const MethodChannel('app.moviefox/task').invokeMethod<bool>('moveToBackground');
         return false;
       } catch (_) {}
     }
+    if (_page == 5) return true;
     if (_page == 1) _searchKey.currentState?.resetSearch();
     if (_pageHistory.isNotEmpty) {
       setState(() => _page = _pageHistory.removeLast());
