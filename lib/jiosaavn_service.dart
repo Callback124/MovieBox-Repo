@@ -174,7 +174,7 @@ class JioSaavnPlayer {
         if (url.startsWith('http')) ranked.add({'url': url, 'quality': (row['quality'] ?? '').toString()});
       }
       ranked.sort((a, b) {
-        int rank(String q) => int.tryParse(RegExp(r'\\d+').firstMatch(q)?.group(0) ?? '') ?? 0;
+        int rank(String q) => int.tryParse(RegExp(r'\d+').firstMatch(q)?.group(0) ?? '') ?? 0;
         return rank(b['quality'] as String).compareTo(rank(a['quality'] as String));
       });
       if (ranked.isNotEmpty) return ranked.map((e) => e['url'] as String).toList();
@@ -190,10 +190,10 @@ class JioSaavnPlayer {
     if (encrypted.isEmpty) throw Exception('Audio URL not available');
     final decoded = base64.decode(encrypted.trim());
     final decrypted = DES(key: '38346591'.codeUnits, mode: DESMode.ECB, paddingType: DESPaddingType.PKCS5).decrypt(decoded);
-    var url = utf8.decode(decrypted).replaceAll('\\u0000', '').trim();
+    var url = utf8.decode(decrypted).replaceAll('\u0000', '').trim();
     if (!url.startsWith('http')) throw Exception('Decrypted audio URL invalid');
     url = url.replaceFirst('http://', 'https://');
-    url = url.replaceAllMapped(RegExp(r'_\\d+\\.(mp4|m4a)', caseSensitive: false), (m) => '_$quality.${m[1]}');
+    url = url.replaceAllMapped(RegExp(r'_\d+\.(mp4|m4a)', caseSensitive: false), (m) => '_$quality.${m[1]}');
     return url;
   }
   static Future<void>? _backgroundAudioInit;
