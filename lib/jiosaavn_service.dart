@@ -155,33 +155,29 @@ class JioSaavnPlayer {
     queue..clear()..addAll(songs); index = start.clamp(0, queue.length - 1).toInt(); revision.value++; await playCurrent();
   }
   Future<List<String>> _fallbackAudioUrls(SaavnSong song) async {
-    // Public Saavn.dev response exposes ready-to-play quality URLs and is used
-    // only when the primary JioSaavn encrypted CDN URL cannot be opened.
-    final uri = Uri.https('saavn.dev', '/api/songs/${song.id}');
-    final response = await http.get(uri, headers: {
-      'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36',
-      'Accept': 'application/json',
-    }).timeout(const Duration(seconds: 15));
-    if (response.statusCode != 200) throw Exception('Fallback stream HTTP ${response.statusCode}');
-    final root = jsonDecode(utf8.decode(response.bodyBytes));
-    dynamic data = root is Map ? (root['data'] ?? root) : root;
-    if (data is! Map) throw Exception('Fallback stream response invalid');
-    final links = data['downloadUrl'] ?? data['download_url'] ?? data['downloadUrls'];
-    if (links is List) {
-      final ranked = <Map<String, dynamic>>[];
-      for (final row in links.whereType<Map>()) {
-        final url = (row['url'] ?? row['link'] ?? '').toString();
-        if (url.startsWith('http')) ranked.add({'url': url, 'quality': (row['quality'] ?? '').toString()});
+    // Retry with fresh song details from JioSaavn itself. Avoid relying on
+    // saavn.dev: it is an unrelated third-party DNS dependency.
+    final details = await api.songDetails(song.id);
+    final more = details['more_info'] is Map ? details['more_info'] as Map : const {};
+    final candidates = <String>[
+      (details['media_url'] ?? more['media_url'] ?? '').toString(),
+      (details['encrypted_media_url'] ?? more['encrypted_media_url'] ?? '').toString(),
+      (details['encrypted_media_url_hq'] ?? more['encrypted_media_url_hq'] ?? '').toString(),
+    ];
+    final urls = <String>[];
+    for (final value in candidates) {
+      if (value.isEmpty) continue;
+      if (value.startsWith('https://') || value.startsWith('http://')) {
+        urls.add(value.replaceFirst('http://', 'https://'));
+      } else {
+        try {
+          final decoded = DES(key: '38346591'.codeUnits, mode: DESMode.ECB, paddingType: DESPaddingType.PKCS5).decrypt(base64.decode(value.trim()));
+          final url = utf8.decode(decoded).replaceAll('\\u0000', '').trim();
+          if (url.startsWith('https://') || url.startsWith('http://')) urls.add(url.replaceFirst('http://', 'https://'));
+        } catch (_) {}
       }
-      ranked.sort((a, b) {
-        int rank(String q) => int.tryParse(RegExp(r'\d+').firstMatch(q)?.group(0) ?? '') ?? 0;
-        return rank(b['quality'] as String).compareTo(rank(a['quality'] as String));
-      });
-      if (ranked.isNotEmpty) return ranked.map((e) => e['url'] as String).toList();
     }
-    final direct = (data['url'] ?? data['media_url'] ?? '').toString();
-    if (direct.startsWith('http')) return [direct];
-    throw Exception('Fallback stream URL missing');
+    return urls.toSet().toList();
   }
 
   Future<String> resolveAudioUrl(SaavnSong song, String quality) async {
@@ -208,7 +204,7 @@ class JioSaavnPlayer {
   }
   Future<void> _setSongSource(SaavnSong song, String url) async {
     await _createAudioPlayerOnce();
-    await audio.setAudioSource(AudioSource.uri(Uri.parse(url), headers: {'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36', 'Accept': '*/*'}, tag: MediaItem(id: song.id, album: song.album, title: song.title, artist: song.artist, artUri: Uri.tryParse(song.image))));
+    await audio.setAudioSource(AudioSource.uri(Uri.parse(url), headers: {'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36', 'Accept': '*/*', 'Referer': 'https://www.jiosaavn.com/', 'Origin': 'https://www.jiosaavn.com'}, tag: MediaItem(id: song.id, album: song.album, title: song.title, artist: song.artist, artUri: Uri.tryParse(song.image))));
   }
   Future<void> playOffline(SaavnSong song, String localUri) async {
     await _createAudioPlayerOnce();
@@ -218,7 +214,8 @@ class JioSaavnPlayer {
   }
   Future<void> playCurrent() async {
     final song = current; if (song == null) return;
-    Object? lastError;
+    Object? primaryError;
+    Object? fallbackError;
     final preferred = bitrate;
     final qualities = <String>[preferred, ...['320', '160', '96'].where((q) => q != preferred)];
     for (final quality in qualities) {
@@ -229,7 +226,7 @@ class JioSaavnPlayer {
         await audio.play();
         return;
       } catch (e) {
-        lastError = e;
+        primaryError = e;
       }
     }
     try {
@@ -239,10 +236,10 @@ class JioSaavnPlayer {
           await _setSongSource(song, url);
           await audio.play();
           return;
-        } catch (e) { lastError = e; }
+        } catch (e) { fallbackError = e; }
       }
-    } catch (e) { lastError = e; }
-    throw Exception('Unable to play this JioSaavn track. Primary and fallback stream failed: $lastError');
+    } catch (e) { fallbackError = e; }
+    throw Exception('JioSaavn stream failed. Primary: $primaryError. Fresh JioSaavn URL retry: $fallbackError');
   }
   Future<void> stopAndClear() async { await audio.stop(); queue.clear(); index = -1; revision.value++; }
   Future<void> next() async { if (queue.isEmpty) return; index = (index + 1) % queue.length; revision.value++; await playCurrent(); }
