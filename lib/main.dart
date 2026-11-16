@@ -12,7 +12,7 @@ import 'search_page.dart';
 import 'settings_page.dart';
 import 'store.dart';
 
-final GlobalKey<NavigatorState> _movieFoxNavigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> movieFoxNavigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

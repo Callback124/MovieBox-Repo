@@ -248,7 +248,7 @@ class _MusicMiniPlayerState extends State<MusicMiniPlayer> with SingleTickerProv
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
-          final navigator = _movieFoxNavigatorKey.currentState;
+          final navigator = movieFoxNavigatorKey.currentState;
           if (navigator == null) return;
           navigator.push(MaterialPageRoute<void>(
             builder: (_) => const SaavnFullPlayer(),
