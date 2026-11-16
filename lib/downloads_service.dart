@@ -77,6 +77,7 @@ class DownloadService extends ChangeNotifier {
   DownloadService._();
   static final DownloadService instance = DownloadService._();
   static const _channel = MethodChannel('app.stratus/downloads');
+  static const _foregroundChannel = MethodChannel('app.moviefox/download-foreground');
   static const _key = 'native_download_records';
   static const _locationKey = 'download_location';
 
@@ -90,6 +91,7 @@ class DownloadService extends ChangeNotifier {
     await _writeRecord({'id': id, 'title': title, 'fileName': '', 'url': '',
       'status': 'running', 'downloaded': 0, 'total': total, 'localUri': null,
       'reason': 0, 'phase': 'Preparing'});
+    await _foregroundChannel.invokeMethod<void>('start', {'title': title, 'progress': 0});
     return id;
   }
 
@@ -107,6 +109,12 @@ class DownloadService extends ChangeNotifier {
       if (localUri != null) 'localUri': localUri,
       if (fileName != null) 'fileName': fileName};
     await prefs.setString(_key, jsonEncode(list));
+    if (status == 'complete' || status == 'failed' || status == 'cancelled') {
+      await _foregroundChannel.invokeMethod<void>('stop');
+    } else {
+      final progress = total > 0 ? (completed * 100 / total).round().clamp(0, 100) : 0;
+      await _foregroundChannel.invokeMethod<void>('update', {'title': list[index]['title'] ?? 'MovieFox download', 'progress': progress});
+    }
     await refresh();
   }
 

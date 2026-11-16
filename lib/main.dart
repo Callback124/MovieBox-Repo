@@ -37,6 +37,7 @@ class MovieFoxApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'MovieFox',
+    navigatorKey: movieFoxNavigatorKey,
     debugShowCheckedModeBanner: false,
     theme: _lightTheme(),
     home: const MovieFoxShell(),
@@ -152,9 +153,9 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
                     GridView.count(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
+                      crossAxisCount: 3,
+                      mainAxisSpacing: 10,
+                      crossAxisSpacing: 10,
                       childAspectRatio: 1,
                       children: [
                         for (final provider in app.enabled)
