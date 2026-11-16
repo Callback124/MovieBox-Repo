@@ -252,30 +252,165 @@ class SaavnFullPlayer extends StatefulWidget {
   @override
   State<SaavnFullPlayer> createState()=>_SaavnFullPlayerState();
 }
-class _SaavnFullPlayerState extends State<SaavnFullPlayer>{
-  final p=JioSaavnPlayer.instance;
-  bool shuffle=false, repeat=false;
-  String time(Duration d)=>d.inMinutes.toString()+':'+(d.inSeconds%60).toString().padLeft(2,'0');
+class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
+  final p = JioSaavnPlayer.instance;
+  bool shuffle = false, repeat = false, liked = false;
+  String time(Duration d) => '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+
   @override
-  Widget build(BuildContext context)=>ValueListenableBuilder<int>(valueListenable:p.revision,builder:(context,_,__){final s=p.current;if(s==null)return const Scaffold(body:Center(child:Text('Nothing playing')));return Scaffold(backgroundColor:const Color(0xFF15171E),appBar:AppBar(backgroundColor:const Color(0xFF15171E),foregroundColor:Colors.white,title:const Text('Playing now'),centerTitle:true,actions:[IconButton(tooltip:'Download',onPressed:()=>_downloadSaavn(context,s),icon:const Icon(Icons.download_outlined)),IconButton(onPressed:_queue,icon:const Icon(Icons.queue_music)),IconButton(onPressed:_lyrics,icon:const Icon(Icons.lyrics_outlined)),PopupMenuButton<String>(onSelected:(v){if(v=='quality')_quality();if(v=='lyrics')_lyrics();},itemBuilder:(_)=>const [PopupMenuItem(value:'quality',child:Text('Audio quality')),PopupMenuItem(value:'lyrics',child:Text('Lyrics'))])]),body:SafeArea(child:Padding(padding:const EdgeInsets.fromLTRB(24,12,24,18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    Expanded(flex:6,child:Center(child:AspectRatio(aspectRatio:1,child:ClipRRect(borderRadius:BorderRadius.circular(22),child:Image.network(s.image,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const ColoredBox(color:Colors.black26,child:Icon(Icons.music_note,size:90,color:Colors.white))))))),
-    const SizedBox(height:24),Row(children:[Expanded(child:Text(s.title,style:const TextStyle(color:Colors.white,fontSize:28,fontWeight:FontWeight.w700),maxLines:2,overflow:TextOverflow.ellipsis)),IconButton(onPressed:()=>ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Favorite saved in a later music update'))),icon:const Icon(Icons.favorite,color:Color(0xFF7CE8E7),size:30))]),
-    Text(s.artist,style:const TextStyle(color:Colors.white60,fontSize:18)),const SizedBox(height:24),
-    StreamBuilder<Duration>(stream:p.audio.positionStream,builder:(context,snap){final pos=snap.data??Duration.zero;final total=p.audio.duration??Duration(seconds:s.duration>0?s.duration:1);final max=total.inMilliseconds.toDouble().clamp(1,double.infinity);return Column(children:[
-      SliderTheme(data:SliderTheme.of(context).copyWith(activeTrackColor:_musicAccent,inactiveTrackColor:Colors.white54,thumbColor:_musicAccent,trackHeight:2),child:Slider(value:(pos.inMilliseconds/max).clamp(0,1).toDouble(),onChanged:(v)=>p.audio.seek(Duration(milliseconds:(v*max).round())))),
-      Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text(time(pos),style:const TextStyle(color:Colors.white38,fontSize:11)),Text(time(total),style:const TextStyle(color:Colors.white38,fontSize:11))]),
-    ]);}),
-    const Spacer(),Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
-      IconButton(color:shuffle?_musicAccent:Colors.white70,onPressed:()async{shuffle=!shuffle;await p.audio.setShuffleModeEnabled(shuffle);if(mounted)setState((){});},icon:const Icon(Icons.shuffle_rounded)),
-      IconButton(color:Colors.white,onPressed:p.previous,icon:const Icon(Icons.skip_previous_rounded,size:36)),
-      StreamBuilder<PlayerState>(stream:p.audio.playerStateStream,builder:(context,snap)=>Container(width:78,height:78,decoration:const BoxDecoration(color:_musicAccent,shape:BoxShape.circle),child:IconButton(color:const Color(0xFF10252A),iconSize:38,onPressed:()=>snap.data?.playing==true?p.audio.pause():p.audio.play(),icon:Icon(snap.data?.playing==true?Icons.pause_rounded:Icons.play_arrow_rounded)))),
-      IconButton(color:Colors.white,onPressed:p.next,icon:const Icon(Icons.skip_next_rounded,size:36)),
-      IconButton(color:repeat?_musicAccent:Colors.white70,onPressed:()async{repeat=!repeat;await p.audio.setLoopMode(repeat?LoopMode.one:LoopMode.off);if(mounted)setState((){});},icon:const Icon(Icons.repeat_rounded)),
-    ]),const SizedBox(height:10),
-  ]))));});
-  Future<void> _quality()async{final q=await showDialog<String>(context:context,builder:(ctx)=>SimpleDialog(title:const Text('Audio quality'),children:[for(final v in ['320','160','96'])SimpleDialogOption(onPressed:()=>Navigator.pop(ctx,v),child:Text(v+' kbps'+(p.bitrate==v?' ✓':'')))]));if(q!=null){try{await p.setQuality(q);}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}}
-  Future<void> _lyrics()async{final s=p.current;if(s==null)return;showModalBottomSheet<void>(context:context,isScrollControlled:true,showDragHandle:true,builder:(_)=>FutureBuilder<String>(future:p.api.lyrics(s),builder:(ctx,snap)=>SizedBox(height:MediaQuery.sizeOf(ctx).height*.7,child:Padding(padding:const EdgeInsets.all(22),child:snap.connectionState==ConnectionState.waiting?const Center(child:CircularProgressIndicator()):SingleChildScrollView(child:Text(snap.data??'Lyrics unavailable',style:const TextStyle(height:1.7)))))));}
-  void _queue(){showModalBottomSheet<void>(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>SizedBox(height:MediaQuery.sizeOf(ctx).height*.7,child:ListView(children:[const ListTile(title:Text('Up next')),for(var i=0;i<p.queue.length;i++)ListTile(title:Text(p.queue[i].title),subtitle:Text(p.queue[i].artist),selected:i==p.index,onTap:()async{p.index=i;p.revision.value++;await p.playCurrent();if(ctx.mounted)Navigator.pop(ctx);})])));}
+  Widget build(BuildContext context) => ValueListenableBuilder<int>(
+    valueListenable: p.revision,
+    builder: (context, _, __) {
+      final s = p.current;
+      if (s == null) return const Scaffold(body: Center(child: Text('Nothing playing')));
+      final size = MediaQuery.sizeOf(context);
+      final compact = size.height < 760;
+      return Scaffold(
+        backgroundColor: const Color(0xFF071B46),
+        body: Stack(fit: StackFit.expand, children: [
+          DecoratedBox(decoration: const BoxDecoration(gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [Color(0xFF087B91), Color(0xFF536B91), Color(0xFF06143D)],
+          ))),
+          SafeArea(child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(38),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0x99B9D3E4),
+                  border: Border.all(color: const Color(0xBFEAF7FF), width: 1.5),
+                  borderRadius: BorderRadius.circular(38),
+                  boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 28, offset: Offset(0, 12))],
+                ),
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(22, compact ? 12 : 20, 22, 18),
+                  child: Column(children: [
+                    Row(children: [
+                      _glassButton(Icons.keyboard_arrow_down_rounded, () => Navigator.maybePop(context), size: 48),
+                      const Spacer(),
+                      const Text('Now Playing', style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800)),
+                      const Spacer(),
+                      _glassButton(Icons.more_horiz_rounded, _more, size: 48),
+                    ]),
+                    SizedBox(height: compact ? 24 : 48),
+                    Center(child: Container(
+                      width: (size.width * .68).clamp(190.0, 330.0),
+                      height: (size.width * .68).clamp(190.0, 330.0),
+                      padding: const EdgeInsets.all(9),
+                      decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0x6695B6CD),
+                        border: Border.all(color: const Color(0x99E9F6FF), width: 2),
+                        boxShadow: const [BoxShadow(color: Color(0x55708DA9), blurRadius: 20, spreadRadius: 2)]),
+                      child: ClipOval(child: Image.network(s.image, fit: BoxFit.cover,
+                        loadingBuilder: (_, child, progress) => progress == null ? child : const ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, size: 80, color: Colors.white70)),
+                        errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, size: 80, color: Colors.white70)))),
+                    )),
+                    SizedBox(height: compact ? 24 : 42),
+                    Text(s.title, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.white, fontSize: compact ? 25 : 32, fontWeight: FontWeight.w800, letterSpacing: .2)),
+                    const SizedBox(height: 6),
+                    Text(s.artist, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Color(0xFFF0F5FF), fontSize: 18)),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      IconButton(onPressed: _queue, color: Colors.white, icon: const Icon(Icons.queue_music_rounded, size: 28)),
+                      const Spacer(),
+                      IconButton(onPressed: () => setState(() => liked = !liked),
+                        color: Colors.white, icon: Icon(liked ? Icons.favorite : Icons.favorite_border, size: 28)),
+                    ]),
+                    const SizedBox(height: 4),
+                    StreamBuilder<Duration>(stream: p.audio.positionStream, builder: (context, snap) {
+                      final pos = snap.data ?? Duration.zero;
+                      final total = p.audio.duration ?? Duration(seconds: s.duration > 0 ? s.duration : 1);
+                      final max = total.inMilliseconds.toDouble().clamp(1, double.infinity);
+                      return Column(children: [
+                        SizedBox(height: 56, child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                          Text(time(pos), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                          const SizedBox(width: 8),
+                          Expanded(child: GestureDetector(
+                            onTapDown: (d) { final box = context.findRenderObject() as RenderBox?; if (box != null) { final local = box.globalToLocal(d.globalPosition); final ratio = (local.dx / box.size.width).clamp(0.0, 1.0); p.audio.seek(Duration(milliseconds: (ratio * max).round())); } },
+                            child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, crossAxisAlignment: CrossAxisAlignment.center,
+                              children: List.generate(44, (i) { final h = [10,17,24,14,31,19,38,22,13,29,42,20,34,16,27,45,18,31,23,39,15,28][i % 22].toDouble(); return Container(width: 2.4, height: h, decoration: BoxDecoration(color: Colors.white.withOpacity(i / 44 < pos.inMilliseconds / max ? 1 : .72), borderRadius: BorderRadius.circular(3))); })),
+                          )),
+                          const SizedBox(width: 8),
+                          Text(time(total), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                        ])),
+                      ]);
+                    }),
+                    SizedBox(height: compact ? 14 : 28),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+                      _glassButton(Icons.skip_previous_rounded, p.previous, size: 62, iconSize: 32),
+                      StreamBuilder<PlayerState>(stream: p.audio.playerStateStream, builder: (context, snap) {
+                        final playing = snap.data?.playing == true;
+                        return GestureDetector(onTap: () => playing ? p.audio.pause() : p.audio.play(),
+                          child: Container(width: 88, height: 88, decoration: BoxDecoration(shape: BoxShape.circle,
+                            gradient: const LinearGradient(colors: [Color(0xFF7B26E8), Color(0xFFDF0AD6)]),
+                            border: Border.all(color: const Color(0xFFD9E7F5), width: 7),
+                            boxShadow: const [BoxShadow(color: Color(0x55751DDA), blurRadius: 18)]),
+                            child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 42)));
+                      }),
+                      _glassButton(Icons.skip_next_rounded, p.next, size: 62, iconSize: 32),
+                    ]),
+                    SizedBox(height: compact ? 18 : 36),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      IconButton(onPressed: () async { shuffle = !shuffle; await p.audio.setShuffleModeEnabled(shuffle); if (mounted) setState(() {}); },
+                        color: Colors.white, icon: Icon(Icons.shuffle_rounded, color: shuffle ? const Color(0xFF7B26E8) : Colors.white)),
+                      TextButton(onPressed: _lyrics, child: const Text('Lyrics', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800))),
+                      IconButton(onPressed: () async { repeat = !repeat; await p.audio.setLoopMode(repeat ? LoopMode.one : LoopMode.off); if (mounted) setState(() {}); },
+                        color: Colors.white, icon: Icon(Icons.repeat_rounded, color: repeat ? const Color(0xFF7B26E8) : Colors.white)),
+                    ]),
+                  ]),
+                ),
+              ),
+            ),
+          )),
+        ]),
+      );
+    },
+  );
+
+  Widget _glassButton(IconData icon, VoidCallback onTap, {double size = 48, double iconSize = 28}) =>
+    Material(color: const Color(0x88E7F3FC), shape: const CircleBorder(), child: InkWell(
+      customBorder: const CircleBorder(), onTap: onTap, child: SizedBox(width: size, height: size,
+        child: Icon(icon, color: const Color(0xFF101A32), size: iconSize))));
+
+  Future<void> _more() async {
+    final choice = await showModalBottomSheet<String>(context: context, showDragHandle: true,
+      builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        ListTile(leading: const Icon(Icons.download_outlined), title: const Text('Download'), onTap: () => Navigator.pop(ctx, 'download')),
+        ListTile(leading: const Icon(Icons.queue_music), title: const Text('Up next'), onTap: () => Navigator.pop(ctx, 'queue')),
+        ListTile(leading: const Icon(Icons.high_quality), title: const Text('Audio quality'), onTap: () => Navigator.pop(ctx, 'quality')),
+        ListTile(leading: const Icon(Icons.lyrics_outlined), title: const Text('Lyrics'), onTap: () => Navigator.pop(ctx, 'lyrics')),
+      ])));
+    if (!mounted || choice == null) return;
+    if (choice == 'download' && p.current != null) await _downloadSaavn(context, p.current!);
+    if (choice == 'queue') _queue();
+    if (choice == 'quality') await _quality();
+    if (choice == 'lyrics') await _lyrics();
+  }
+
+  Future<void> _quality() async {
+    final q = await showDialog<String>(context: context, builder: (ctx) => SimpleDialog(title: const Text('Audio quality'),
+      children: [for (final v in ['320', '160', '96']) SimpleDialogOption(onPressed: () => Navigator.pop(ctx, v), child: Text('$v kbps${p.bitrate == v ? ' ✓' : ''}'))]));
+    if (q != null) { try { await p.setQuality(q); } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); } }
+  }
+
+  Future<void> _lyrics() async {
+    final song = p.current; if (song == null) return;
+    showModalBottomSheet<void>(context: context, isScrollControlled: true, showDragHandle: true,
+      builder: (_) => FutureBuilder<String>(future: p.api.lyrics(song), builder: (ctx, snap) => SizedBox(height: MediaQuery.sizeOf(ctx).height * .7,
+        child: Padding(padding: const EdgeInsets.all(22), child: snap.connectionState == ConnectionState.waiting
+          ? const Center(child: CircularProgressIndicator()) : SingleChildScrollView(child: Text(snap.data ?? 'Lyrics unavailable', style: const TextStyle(height: 1.7)))))));
+  }
+
+  void _queue() {
+    showModalBottomSheet<void>(context: context, isScrollControlled: true, showDragHandle: true,
+      builder: (ctx) => SizedBox(height: MediaQuery.sizeOf(ctx).height * .7, child: ListView(children: [
+        const ListTile(title: Text('Up next')),
+        for (var i = 0; i < p.queue.length; i++) ListTile(title: Text(p.queue[i].title), subtitle: Text(p.queue[i].artist),
+          selected: i == p.index, onTap: () async { p.index = i; p.revision.value++; await p.playCurrent(); if (ctx.mounted) Navigator.pop(ctx); })
+      ])));
+  }
 }
 
 class SaavnCollectionPage extends StatefulWidget {
@@ -311,7 +446,7 @@ class _SaavnCollectionPageState extends State<SaavnCollectionPage> {
     Widget placeholder() => const ColoredBox(color: Color(0xFFF1F2F4), child: Center(child: Icon(Icons.music_note, size: 42)));
     Widget cover() => image.isEmpty ? placeholder() : Image.network(image, fit: BoxFit.cover, loadingBuilder: (_, child, progress) => progress == null ? child : placeholder(), errorBuilder: (_, __, ___) => placeholder());
     return SliverToBoxAdapter(child: Column(children: [
-      SizedBox(height: 220, child: Stack(fit: StackFit.expand, children: [cover(), DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black38, cs.surface], stops: const [.25, 1])))])),
+      SizedBox(height: 290, child: Stack(fit: StackFit.expand, children: [cover(), DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black38, cs.surface], stops: const [.25, 1])))])),
       Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 14), child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         SizedBox(width: 110, child: ClipRRect(borderRadius: BorderRadius.circular(10), child: AspectRatio(aspectRatio: 2/3, child: cover()))), const SizedBox(width: 16),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)), const SizedBox(height: 6), Text(subtitle), const SizedBox(height: 12),
@@ -360,7 +495,7 @@ class _SaavnArtistPageState extends State<SaavnArtistPage> {
     final cs = Theme.of(context).colorScheme;
     Widget placeholder() => const ColoredBox(color: Color(0xFFF1F2F4), child: Center(child: Icon(Icons.person, size: 42)));
     return CustomScrollView(slivers: [
-      SliverAppBar(pinned: true, expandedHeight: 220, flexibleSpace: FlexibleSpaceBar(background: Stack(fit: StackFit.expand, children: [
+      SliverAppBar(pinned: true, expandedHeight: 290, flexibleSpace: FlexibleSpaceBar(background: Stack(fit: StackFit.expand, children: [
         if (image.isNotEmpty) Image.network(image, fit: BoxFit.cover, loadingBuilder: (_, child, progress) => progress == null ? child : placeholder(), errorBuilder: (_, __, ___) => const SizedBox.shrink()),
         DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black38, cs.surface], stops: const [.25, 1])))
       ]))),
