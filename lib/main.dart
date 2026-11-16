@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -10,6 +11,8 @@ import 'jiosaavn_service.dart';
 import 'search_page.dart';
 import 'settings_page.dart';
 import 'store.dart';
+
+final GlobalKey<NavigatorState> _movieFoxNavigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -114,53 +117,72 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
   void _chooseProvider(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black26,
+      elevation: 0,
+      showDragHandle: false,
       isScrollControlled: false,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            16, 4, 16,
-            24 + (JioSaavnPlayer.instance.miniPlayerVisible.value ? 82 : 0),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(bottom: 14),
-                child: Text('Choose provider', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              ),
-              GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 2.7,
-                children: [
-                  for (final provider in app.enabled)
-                    _ProviderChoice(
-                      name: provider.name,
-                      icon: _providerIcon(provider.kind),
-                      selected: _page != 5 && app.active == provider.id,
-                      onTap: () {
-                        app.setActive(provider.id);
-                        Navigator.pop(sheetContext);
-                        if (_page != 0) setState(() { _pageHistory.add(_page); _page = 0; });
-                      },
+      builder: (sheetContext) => ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.20),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+              border: Border.all(color: Colors.white.withOpacity(.32), width: 1),
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16, 12, 16,
+                  18 + (JioSaavnPlayer.instance.miniPlayerVisible.value ? 82 : 0),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(child: Container(width: 38, height: 4, decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(.65), borderRadius: BorderRadius.circular(8),
+                    ))),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(2, 14, 2, 14),
+                      child: Text('Choose provider', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.black87)),
                     ),
-                  _ProviderChoice(
-                    name: 'JioSaavn',
-                    icon: _providerIcon('jiosaavn'),
-                    selected: _page == 5,
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _goToPage(5);
-                    },
-                  ),
-                ],
+                    GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1,
+                      children: [
+                        for (final provider in app.enabled)
+                          _ProviderChoice(
+                            name: provider.name,
+                            icon: _providerIcon(provider.kind),
+                            selected: _page != 5 && app.active == provider.id,
+                            onTap: () {
+                              app.setActive(provider.id);
+                              Navigator.pop(sheetContext);
+                              if (_page != 0) setState(() { _pageHistory.add(_page); _page = 0; });
+                            },
+                          ),
+                        _ProviderChoice(
+                          name: 'JioSaavn',
+                          icon: _providerIcon('jiosaavn'),
+                          selected: _page == 5,
+                          onTap: () {
+                            Navigator.pop(sheetContext);
+                            _goToPage(5);
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -207,20 +229,31 @@ class _ProviderChoice extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: selected ? const Color(0xFFEAF0FF) : const Color(0xFFF5F6F8),
-    borderRadius: BorderRadius.circular(12),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Row(children: [
-          SizedBox(width: 27, height: 27, child: Center(child: icon)),
-          const SizedBox(width: 9),
-          Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontWeight: FontWeight.w600, color: selected ? const Color(0xFF3157C8) : Colors.black87))),
-        ]),
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(18),
+    child: BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+      child: Material(
+        color: (selected ? const Color(0xFFEAF0FF) : Colors.white).withOpacity(.20),
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withOpacity(.42), width: 1),
+            ),
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(width: 42, height: 42, child: Center(child: icon)),
+                const SizedBox(height: 10),
+                Text(name, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: FontWeight.w700, color: selected ? const Color(0xFF2449B8) : Colors.black87)),
+              ],
+            ),
+          ),
+        ),
       ),
     ),
   );

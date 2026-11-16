@@ -247,9 +247,14 @@ class _MusicMiniPlayerState extends State<MusicMiniPlayer> with SingleTickerProv
       if (song == null) return const SizedBox.shrink();
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => Navigator.of(context, rootNavigator: true).push(
-          MaterialPageRoute<void>(builder: (_) => const SaavnFullPlayer()),
-        ),
+        onTap: () {
+          final navigator = _movieFoxNavigatorKey.currentState;
+          if (navigator == null) return;
+          navigator.push(MaterialPageRoute<void>(
+            builder: (_) => const SaavnFullPlayer(),
+            settings: const RouteSettings(name: '/music-player'),
+          ));
+        },
         child: Material(
           color: Colors.transparent,
           child: Container(
