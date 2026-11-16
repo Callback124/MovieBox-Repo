@@ -462,17 +462,11 @@ class _DownloadPageState extends State<DownloadPage> {
               selected: _rangeStart == start, onSelected: _loading ? null : (_) => _changeRange(start),
             ),
           )]),
-        if (_qualities.isNotEmpty)
-          _tabs([for (final q in _qualities) Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(showCheckmark: false, label: Text(q), selected: q == _quality,
-              onSelected: _loading ? null : (_) async { setState(() => _quality = q); await _loadSizes(); }),
-          )]),
-        if (_loading)
+undefined        if (_loading)
           Expanded(child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
             const CircularProgressIndicator(),
             const SizedBox(height: 12),
-            Text(_series ? 'Checking episodes $_scanned/$_scanTotal…' : 'Finding download qualities…'),
+            Text(_series ? 'Checking episodes $_scanned/$_scanTotal…' : 'Finding highest available quality…'),
           ]))),
         if (!_loading && _error != null)
           Expanded(child: Center(child: Padding(

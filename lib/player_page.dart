@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'models.dart';
 import 'providers.dart';
+import 'jiosaavn_service.dart';
 import 'store.dart';
 import 'widgets.dart';
 
@@ -231,6 +232,7 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _wasPlaying = false;
 
   Future<bool> _load(Source s) async {
+    await JioSaavnPlayer.instance.pauseForVideo();
     final pr = app.progress[progressKey(_item, _ep)];
     final resume = pr != null && pr.t > 5 && pr.d - pr.t > 10;
     _startAt = resume ? Duration(seconds: pr.t.toInt()) : null;
@@ -319,6 +321,7 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Future<void> _loadLocal(File file) async {
+    await JioSaavnPlayer.instance.pauseForVideo();
     setState(() {
       _msg = 'Loading offline video…';
       _showPickInMsg = false;

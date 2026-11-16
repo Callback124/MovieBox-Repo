@@ -148,13 +148,18 @@ class JioSaavnPlayer {
   final JioSaavnApi api = JioSaavnApi();
   final List<SaavnSong> queue = [];
   final ValueNotifier<int> revision = ValueNotifier<int>(0);
+  final ValueNotifier<bool> miniPlayerVisible = ValueNotifier<bool>(false);
+  Future<void> pauseForVideo() async {
+    miniPlayerVisible.value = false;
+    if (_audio?.playing == true) await _audio!.pause();
+  }
   int index = -1;
   String bitrate = '320';
   SaavnSong? get current => index >= 0 && index < queue.length ? queue[index] : null;
   Future<void> playList(List<SaavnSong> songs, {int start = 0}) async {
     if (songs.isEmpty) return;
     await _createAudioPlayerOnce();
-    queue..clear()..addAll(songs); index = start.clamp(0, queue.length - 1).toInt(); revision.value++; await playCurrent();
+    queue..clear()..addAll(songs); index = start.clamp(0, queue.length - 1).toInt(); miniPlayerVisible.value = true; revision.value++; await playCurrent();
   }
   Future<List<String>> _fallbackAudioUrls(SaavnSong song) async {
     // Retry with fresh song details from JioSaavn itself. Avoid relying on
@@ -211,7 +216,7 @@ class JioSaavnPlayer {
   }
   Future<void> playOffline(SaavnSong song, String localUri) async {
     await _createAudioPlayerOnce();
-    queue..clear()..add(song); index = 0; revision.value++;
+    queue..clear()..add(song); index = 0; miniPlayerVisible.value = true; revision.value++;
     await audio.setAudioSource(AudioSource.uri(Uri.parse(localUri), tag: MediaItem(id: song.id, album: song.album, title: song.title, artist: song.artist, artUri: Uri.tryParse(song.image))));
     await audio.play();
   }
@@ -245,7 +250,7 @@ class JioSaavnPlayer {
     } catch (e) { fallbackError = e; }
     throw Exception('JioSaavn stream failed. Primary: $primaryError. Fresh JioSaavn URL retry: $fallbackError');
   }
-  Future<void> stopAndClear() async { await audio.stop(); queue.clear(); index = -1; revision.value++; }
+  Future<void> stopAndClear() async { await audio.stop(); queue.clear(); index = -1; miniPlayerVisible.value = false; revision.value++; }
   Future<void> next() async { if (queue.isEmpty) return; if (index >= queue.length - 1) { await audio.pause(); await audio.seek(Duration.zero); return; } index++; revision.value++; await playCurrent(); }
   Future<void> previous() async { if (queue.isEmpty) return; if (audio.position > const Duration(seconds: 3)) { await audio.seek(Duration.zero); return; } if (index <= 0) { await audio.seek(Duration.zero); return; } index--; revision.value++; await playCurrent(); }
   Future<void> setQuality(String value) async {

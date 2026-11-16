@@ -5,6 +5,7 @@ import 'downloads_service.dart';
 import 'home_page.dart';
 import 'history_page.dart';
 import 'music_page.dart';
+import 'jiosaavn_service.dart';
 import 'search_page.dart';
 import 'settings_page.dart';
 import 'store.dart';
@@ -166,7 +167,12 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
           ],
         ) : null,
         body: IndexedStack(index: _page, children: _pages),
-        bottomNavigationBar: _page == 5 ? const MusicMiniPlayer() : null,
+        bottomNavigationBar: ValueListenableBuilder<bool>(
+          valueListenable: JioSaavnPlayer.instance.miniPlayerVisible,
+          builder: (context, visible, _) => visible && _page != 5
+              ? const MusicMiniPlayer()
+              : (_page == 5 && visible ? const MusicMiniPlayer() : null),
+        ),
       ),
     ),
   );

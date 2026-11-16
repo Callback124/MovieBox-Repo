@@ -9,17 +9,7 @@ import 'widgets.dart';
 const _musicAccent = Color(0xFF38DAD5);
 
 Future<void> _downloadSaavn(BuildContext context, SaavnSong song) async {
-  final quality = await showModalBottomSheet<String>(
-    context: context,
-    showDragHandle: true,
-    builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Padding(padding: const EdgeInsets.all(16), child: Text('Download quality', style: Theme.of(ctx).textTheme.titleLarge)),
-      for (final q in ['320', '160', '96'])
-        ListTile(leading: const Icon(Icons.audio_file), title: Text('$q kbps'), onTap: () => Navigator.pop(ctx, q)),
-      const SizedBox(height: 8),
-    ])),
-  );
-  if (quality == null) return;
+  final quality = song.has320kbps == false ? '160' : '320';
   try {
     final url = await JioSaavnPlayer.instance.resolveAudioUrl(song, quality);
     final safe = song.title.replaceAll(RegExp(r'[^a-zA-Z0-9 _-]'), '').trim();
@@ -345,16 +335,21 @@ class _SaavnWaveformPainter extends CustomPainter {
     final gap = size.width / count;
     final stroke = math.max(2.0, math.min(3.8, gap * .48));
     final center = size.height / 2;
-    final played = Paint()..color = Colors.white..strokeWidth = stroke..strokeCap = StrokeCap.round;
+    final played = Paint()..color = Colors.white..strokeWidth = stroke..strokeCap = StrokeCap.round..style = PaintingStyle.fill;
     final remaining = Paint()..color = Colors.white.withOpacity(.58)..strokeWidth = stroke..strokeCap = StrokeCap.round;
     for (var i = 0; i < count; i++) {
       final x = gap * (i + .5);
       const cycleBars = 14;
-      final phase = (i % cycleBars) / (cycleBars - 1);
-      final triangle = phase <= .5 ? phase * 2 : (1 - phase) * 2;
-      final envelope = .16 + .84 * triangle;
-      final h = 5.0 + (size.height * .88 * envelope);
-      canvas.drawLine(Offset(x, center - h / 2), Offset(x, center + h / 2), x / size.width <= progress ? played : remaining);
+      final phase = (i % cycleBars) / cycleBars;
+      // Smooth rounded musical envelope: short → tall → short → tall.
+      final wave = .5 - .5 * math.cos(phase * math.pi * 2);
+      final envelope = .12 + .88 * wave;
+      final h = 4.0 + (size.height * .78 * envelope);
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(x, center), width: stroke, height: h),
+        Radius.circular(stroke / 2),
+      );
+      canvas.drawRRect(rect, x / size.width <= progress ? played : remaining);
     }
   }
 
@@ -482,20 +477,12 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
       builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
         ListTile(leading: const Icon(Icons.download_outlined), title: const Text('Download'), onTap: () => Navigator.pop(ctx, 'download')),
         ListTile(leading: const Icon(Icons.queue_music), title: const Text('Up next'), onTap: () => Navigator.pop(ctx, 'queue')),
-        ListTile(leading: const Icon(Icons.high_quality), title: const Text('Audio quality'), onTap: () => Navigator.pop(ctx, 'quality')),
-        ListTile(leading: const Icon(Icons.lyrics_outlined), title: const Text('Lyrics'), onTap: () => Navigator.pop(ctx, 'lyrics')),
+                ListTile(leading: const Icon(Icons.lyrics_outlined), title: const Text('Lyrics'), onTap: () => Navigator.pop(ctx, 'lyrics')),
       ])));
     if (!mounted || choice == null) return;
     if (choice == 'download' && p.current != null) await _downloadSaavn(context, p.current!);
     if (choice == 'queue') _queue();
-    if (choice == 'quality') await _quality();
     if (choice == 'lyrics') await _lyrics();
-  }
-
-  Future<void> _quality() async {
-    final q = await showDialog<String>(context: context, builder: (ctx) => SimpleDialog(title: const Text('Audio quality'),
-      children: [for (final v in ['320', '160', '96']) SimpleDialogOption(onPressed: () => Navigator.pop(ctx, v), child: Text('$v kbps${p.bitrate == v ? ' ✓' : ''}'))]));
-    if (q != null) { try { await p.setQuality(q); } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); } }
   }
 
   Future<void> _lyrics() async {
