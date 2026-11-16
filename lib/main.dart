@@ -64,6 +64,7 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
   }
 
   Future<bool> _handleBack() async {
+    if (_page == 5) return true;
     if (_page == 1) _searchKey.currentState?.resetSearch();
     if (_pageHistory.isNotEmpty) {
       setState(() => _page = _pageHistory.removeLast());

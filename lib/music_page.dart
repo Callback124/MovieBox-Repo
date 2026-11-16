@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'downloads_service.dart';
 import 'jiosaavn_service.dart';
+import 'models.dart';
+import 'widgets.dart';
 
 const _musicAccent = Color(0xFF38DAD5);
 
@@ -97,7 +99,7 @@ class _MusicPageState extends State<MusicPage> {
     padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
     sliver: SliverGrid.builder(
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 190, childAspectRatio: .82,
+        maxCrossAxisExtent: 150, childAspectRatio: .48,
         crossAxisSpacing: 12, mainAxisSpacing: 14,
       ),
       itemCount: tab == 0 ? songs.length : media.length,
@@ -137,13 +139,58 @@ class _MusicPageState extends State<MusicPage> {
     ),
   );
 
-  Widget _section(SaavnSection s)=>Padding(padding:const EdgeInsets.only(bottom:20),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    Padding(padding:const EdgeInsets.fromLTRB(16,0,16,10),child:Text(s.title,style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold))),
-    SizedBox(height:206,child:ListView.builder(scrollDirection:Axis.horizontal,padding:const EdgeInsets.symmetric(horizontal:16),itemCount:s.items.length,itemBuilder:(context,i){final m=s.items[i];final image=img(m);return GestureDetector(onTap:()=>s.title.toLowerCase().contains('genres')? _searchGenre(saavnClean(m['title']??m['name']??'')) : open(m),child:SizedBox(width:146,child:Padding(padding:const EdgeInsets.only(right:12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      ClipRRect(borderRadius:BorderRadius.circular(12),child:AspectRatio(aspectRatio:1,child:image.isEmpty?const ColoredBox(color:Colors.black12,child:Icon(Icons.music_note)):Image.network(image,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.music_note)))),
-      const SizedBox(height:7),Text(saavnClean(m['title']??m['name']??'Music'),maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w600,fontSize:13)),
-    ]))));})),
-  ]));
+  Item _saavnCard(Map<String, dynamic> m) => Item(
+    pid: 'jiosaavn',
+    id: (m['id'] ?? m['albumid'] ?? m['listid'] ?? m['artistid'] ?? m['title'] ?? '').toString(),
+    type: 'music',
+    title: saavnClean(m['title'] ?? m['name'] ?? 'Music'),
+    poster: img(m),
+  );
+
+  Widget _section(SaavnSection s) {
+    final w = cardWidth(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: Row(children: [
+            Expanded(child: Text(s.title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
+            if (s.items.isNotEmpty)
+              TextButton(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => SaavnSectionGridPage(title: s.title, items: s.items, onOpen: open))),
+                child: const Text('View all'),
+              ),
+          ]),
+        ),
+        SizedBox(
+          height: w * 1.5 + 54,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: s.items.length,
+            itemExtent: w + 12,
+            cacheExtent: w * 7,
+            itemBuilder: (context, i) {
+              final m = s.items[i];
+              final item = _saavnCard(m);
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: PosterCard(
+                  item: item,
+                  onTap: () => s.title.toLowerCase().contains('genres')
+                      ? _searchGenre(item.title)
+                      : open(m),
+                ),
+              );
+            },
+          ),
+        ),
+      ]),
+    );
+  }
   Widget _songTile(SaavnSong s,List<SaavnSong> list)=>ListTile(leading:ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.network(s.image,width:50,height:50,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.music_note))),title:Text(s.title,maxLines:1),subtitle:Text(s.artist,maxLines:1),trailing:IconButton(icon:const Icon(Icons.more_vert),onPressed:()=>showModalBottomSheet<void>(context:context,builder:(ctx)=>SafeArea(child:Wrap(children:[
     ListTile(title:Text(s.title),subtitle:Text(s.artist)),
     ListTile(leading:const Icon(Icons.play_arrow),title:const Text('Play next'),onTap:(){final p=JioSaavnPlayer.instance;p.queue.insert((p.index+1).clamp(0,p.queue.length).toInt(),s);Navigator.pop(ctx);}),
@@ -151,6 +198,41 @@ class _MusicPageState extends State<MusicPage> {
     ListTile(leading:const Icon(Icons.download_outlined),title:const Text('Download'),onTap:(){Navigator.pop(ctx);_downloadSaavn(context,s);}),
     ListTile(leading:const Icon(Icons.album),title:const Text('View album'),onTap:(){Navigator.pop(ctx);Navigator.push(context,MaterialPageRoute(builder:(_)=>SaavnCollectionPage(item:{'albumid':s.albumId,'title':s.album,'image':s.image},playlist:false)));}),
   ])))),onTap:()=>play(list,list.indexOf(s)));
+}
+
+class SaavnSectionGridPage extends StatelessWidget {
+  const SaavnSectionGridPage({super.key, required this.title, required this.items, required this.onOpen});
+  final String title;
+  final List<Map<String, dynamic>> items;
+  final ValueChanged<Map<String, dynamic>> onOpen;
+
+  String _image(Map<String, dynamic> m) => (m['image'] ?? m['album_image'] ?? '')
+      .toString().replaceAll('150x150', '500x500')
+      .replaceAll('50x50', '500x500').replaceAll('http://', 'https://');
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(saavnClean(title))),
+    body: GridView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 150, childAspectRatio: .48,
+        crossAxisSpacing: 12, mainAxisSpacing: 14,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, i) {
+        final m = items[i];
+        final card = Item(
+          pid: 'jiosaavn',
+          id: (m['id'] ?? m['albumid'] ?? m['listid'] ?? m['artistid'] ?? m['title'] ?? '').toString(),
+          type: 'music',
+          title: saavnClean(m['title'] ?? m['name'] ?? 'Music'),
+          poster: _image(m),
+        );
+        return PosterCard(item: card, onTap: () => onOpen(m));
+      },
+    ),
+  );
 }
 
 class MusicMiniPlayer extends StatelessWidget {
@@ -224,7 +306,7 @@ class _SaavnCollectionPageState extends State<SaavnCollectionPage>{
           ])),
         ]))),
         SliverPadding(padding:const EdgeInsets.fromLTRB(14,0,14,22),sliver:SliverGrid.builder(
-          gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:2,crossAxisSpacing:12,mainAxisSpacing:12,childAspectRatio:.92),
+          gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:2,crossAxisSpacing:12,mainAxisSpacing:12,childAspectRatio:.48),
           itemCount:rows.length,
           itemBuilder:(context,i){final song=rows[i];return InkWell(
             borderRadius:BorderRadius.circular(12),
@@ -256,7 +338,7 @@ class _SaavnArtistPageState extends State<SaavnArtistPage>{
       const Padding(padding:EdgeInsets.all(16),child:Text('Top Songs',style:TextStyle(fontWeight:FontWeight.bold,fontSize:19))),
       if (songs.isNotEmpty) Padding(padding: const EdgeInsets.symmetric(horizontal: 14), child: GridView.builder(
         shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .92),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .48),
         itemCount: songs.length,
         itemBuilder: (context, i) { final song = songs[i]; return InkWell(onTap: () => _playSaavnAndOpen(context, songs, start: i), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(10), child: SizedBox.expand(child: Image.network(song.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 38)))))),
@@ -266,7 +348,7 @@ class _SaavnArtistPageState extends State<SaavnArtistPage>{
       const Padding(padding:EdgeInsets.all(16),child:Text('Top Albums',style:TextStyle(fontWeight:FontWeight.bold,fontSize:19))),
       if(albums is List) Padding(padding: const EdgeInsets.symmetric(horizontal: 14), child: GridView.builder(
         shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .92),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .48),
         itemCount: albums.whereType<Map>().length,
         itemBuilder: (context, i) { final item = Map<String,dynamic>.from(albums.whereType<Map>().elementAt(i)); final image = img(item); return InkWell(onTap: () => Navigator.push(context,MaterialPageRoute(builder:(_)=>SaavnCollectionPage(item:item,playlist:false))), child: Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Expanded(child:ClipRRect(borderRadius:BorderRadius.circular(10),child:SizedBox.expand(child:image.isEmpty?const ColoredBox(color:Color(0xFFF1F2F4),child:Icon(Icons.album,size:38)):Image.network(image,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.album))))),

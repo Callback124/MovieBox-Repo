@@ -45,13 +45,11 @@ class AppState extends ChangeNotifier {
         });
       } catch (_) {}
     }
-    active = _sp.getString('active') ?? 'moviebox';
-    if (active == 'all' || !providers.any((p) => p.id == active && p.enabled)) {
-      active = providers.any((p) => p.id == 'moviebox' && p.enabled)
-          ? 'moviebox'
-          : (providers.firstWhere((p) => p.enabled, orElse: () => ProviderDef.moviebox())).id;
-      _sp.setString('active', active);
-    }
+    // MovieBox is the fixed startup provider; provider switching is session-level.
+    active = providers.any((p) => p.id == 'moviebox' && p.enabled)
+        ? 'moviebox'
+        : (providers.firstWhere((p) => p.enabled, orElse: () => ProviderDef.moviebox())).id;
+    _sp.setString('active', active);
     try {
       theme = ThemeMode.values.byName(_sp.getString('theme') ?? 'light');
     } catch (_) {

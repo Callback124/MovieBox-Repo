@@ -261,7 +261,7 @@ class SearchPageState extends State<SearchPage> {
   Widget _saavnSongGrid(List<SaavnSong> songs) => SliverPadding(
     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
     sliver: SliverGrid.builder(
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 190, childAspectRatio: .82, crossAxisSpacing: 12, mainAxisSpacing: 14),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 150, childAspectRatio: .48, crossAxisSpacing: 12, mainAxisSpacing: 14),
       itemCount: songs.length,
       itemBuilder: (context, i) {
         final song = songs[i];
@@ -280,7 +280,7 @@ class SearchPageState extends State<SearchPage> {
   Widget _saavnMediaGrid(List<Map<String, dynamic>> items) => SliverPadding(
     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
     sliver: SliverGrid.builder(
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 190, childAspectRatio: .82, crossAxisSpacing: 12, mainAxisSpacing: 14),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 150, childAspectRatio: .48, crossAxisSpacing: 12, mainAxisSpacing: 14),
       itemCount: items.length,
       itemBuilder: (context, i) {
         final item = items[i];
