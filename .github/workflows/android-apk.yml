@@ -90,6 +90,34 @@ jobs:
 
               override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
                   super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.stratus/player")
+                      .setMethodCallHandler { call, result ->
+                          when (call.method) {
+                              "getBrightness" -> {
+                                  val current = window.attributes.screenBrightness
+                                  val brightness = if (current >= 0f) current else {
+                                      try {
+                                          android.provider.Settings.System.getInt(
+                                              contentResolver,
+                                              android.provider.Settings.System.SCREEN_BRIGHTNESS
+                                          ) / 255.0
+                                      } catch (_: Exception) { 0.5 }
+                                  }
+                                  result.success(brightness.toDouble().coerceIn(0.0, 1.0))
+                              }
+                              "setBrightness" -> {
+                                  val value = (call.arguments as? Number)?.toFloat()?.coerceIn(0f, 1f)
+                                      ?: 0.5f
+                                  window.attributes = window.attributes.apply { screenBrightness = value }
+                                  result.success(true)
+                              }
+                              "resetBrightness" -> {
+                                  window.attributes = window.attributes.apply { screenBrightness = -1f }
+                                  result.success(true)
+                              }
+                              else -> result.notImplemented()
+                          }
+                      }
                   MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.moviefox/task")
                       .setMethodCallHandler { call, result ->
                           if (call.method == "moveToBackground") {
