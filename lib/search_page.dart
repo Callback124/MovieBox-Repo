@@ -289,7 +289,7 @@ class SearchPageState extends State<SearchPage> {
         final subtitle = saavnClean(item['subtitle'] ?? item['type'] ?? item['artist'] ?? '');
         return InkWell(borderRadius: BorderRadius.circular(12), onTap: () {
           if (_saavnTab == 3) Navigator.push(context, MaterialPageRoute(builder: (_) => SaavnArtistPage(item: item)));
-          else if (_saavnTab == 1 || _saavnTab == 2) showModalBottomSheet<void>(context: context, isScrollControlled: true, showDragHandle: true, builder: (_) => SaavnTracklistSheet(item: item, playlist: _saavnTab == 2));
+          else if (_saavnTab == 1 || _saavnTab == 2) Navigator.push(context, MaterialPageRoute(builder: (_) => SaavnCollectionPage(item: item, playlist: _saavnTab == 2)));
           else { final song = SaavnSong.fromJson(item); JioSaavnPlayer.instance.playList([song]).then((_) { if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const SaavnFullPlayer())); }).catchError((e) { if (context.mounted) toast(context, 'Playback failed: $e'); }); }
         }, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox.expand(child: image.isEmpty ? const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42)) : Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42)))))),
