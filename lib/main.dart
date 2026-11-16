@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'downloads_page.dart';
 import 'downloads_service.dart';
@@ -66,6 +67,12 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
 
   Future<bool> _handleBack() async {
     if (_page == 5) return true;
+    if (_page == 0 && JioSaavnPlayer.instance.miniPlayerVisible.value) {
+      try {
+        await const MethodChannel('app.moviefox/task').invokeMethod<bool>('moveToBackground');
+        return false;
+      } catch (_) {}
+    }
     if (_page == 1) _searchKey.currentState?.resetSearch();
     if (_pageHistory.isNotEmpty) {
       setState(() => _page = _pageHistory.removeLast());
