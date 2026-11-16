@@ -82,6 +82,25 @@ jobs:
           print('Declared AudioService, MediaButtonReceiver and Android 14 media playback permissions')
           PY
 
+      - name: Enable Android cleartext support for audio request compatibility
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path('android/app/src/main/AndroidManifest.xml')
+          content = path.read_text()
+          pattern = r'<application\\b([^>]*)>'
+          match = re.search(pattern, content, re.S)
+          if not match:
+              raise SystemExit('Android application tag missing')
+          attrs = match.group(1)
+          if 'android:usesCleartextTraffic' not in attrs:
+              attrs += ' android:usesCleartextTraffic="true"'
+              content = content[:match.start()] + '<application' + attrs + '>' + content[match.end():]
+          path.write_text(content)
+          print('Enabled cleartext support for just_audio local proxy and HTTP-to-HTTPS CDN redirects')
+          PY
+
       - name: Set Android launcher name to MovieFox
         run: |
           python3 - <<'PY'

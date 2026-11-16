@@ -10,12 +10,13 @@ class SaavnSong {
   const SaavnSong({required this.id, required this.title, required this.artist, required this.album, required this.image, required this.duration, required this.encryptedUrl, this.lyricsId = '', this.albumId = ''});
   final String id, title, artist, album, image, encryptedUrl, lyricsId, albumId;
   final int duration;
+  final bool? has320kbps;
   factory SaavnSong.fromJson(Map raw) {
     final more = raw['more_info'] is Map ? raw['more_info'] as Map : const {};
     final artists = more['artistMap'] is Map ? more['artistMap']['primary_artists'] : null;
     final artist = artists is List ? artists.map((e) => e is Map ? e['name'] : e).where((e) => e != null).join(', ') : (raw['primary_artists'] ?? raw['singers'] ?? raw['artist'] ?? more['singers'] ?? '');
     var image = (raw['image'] ?? raw['album_image'] ?? '').toString().replaceAll('150x150', '500x500').replaceAll('50x50', '500x500').replaceAll('http://', 'https://');
-    return SaavnSong(id: (raw['id'] ?? raw['songid'] ?? '').toString(), title: saavnClean(raw['title'] ?? raw['song'] ?? 'Unknown song'), artist: saavnClean(artist).isEmpty ? 'Unknown artist' : saavnClean(artist), album: saavnClean(raw['album'] ?? ''), image: image, duration: int.tryParse((raw['duration'] ?? 0).toString()) ?? 0, encryptedUrl: (raw['encrypted_media_url'] ?? more['encrypted_media_url'] ?? more['encrypted_media_url_hq'] ?? '').toString(), lyricsId: (more['lyrics_id'] ?? raw['lyrics_id'] ?? '').toString(), albumId: (raw['albumid'] ?? more['album_id'] ?? '').toString());
+    return SaavnSong(id: (raw['id'] ?? raw['songid'] ?? '').toString(), title: saavnClean(raw['title'] ?? raw['song'] ?? 'Unknown song'), artist: saavnClean(artist).isEmpty ? 'Unknown artist' : saavnClean(artist), album: saavnClean(raw['album'] ?? ''), image: image, duration: int.tryParse((raw['duration'] ?? 0).toString()) ?? 0, encryptedUrl: (raw['encrypted_media_url'] ?? more['encrypted_media_url'] ?? more['encrypted_media_url_hq'] ?? '').toString(), lyricsId: (more['lyrics_id'] ?? raw['lyrics_id'] ?? '').toString(), albumId: (raw['albumid'] ?? more['album_id'] ?? '').toString(), has320kbps: (() { final q = more['320kbps'] ?? raw['320kbps']; if (q == null) return null; return q == true || q.toString().toLowerCase() == 'true' || q.toString() == '1'; })());
   }
 }
 String saavnClean(dynamic value) {
@@ -136,7 +137,7 @@ class JioSaavnPlayer {
   }
   Future<AudioPlayer> _initializeAudioPlayer() async {
     await _ensureBackgroundAudio();
-    final player = AudioPlayer();
+    final player = AudioPlayer(userAgent: 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36', useProxyForRequestHeaders: false);
     player.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed) next();
     });
@@ -167,12 +168,13 @@ class JioSaavnPlayer {
     final urls = <String>[];
     for (final value in candidates) {
       if (value.isEmpty) continue;
-      if (value.startsWith('https://') || value.startsWith('http://')) {
-        urls.add(value.replaceFirst('http://', 'https://'));
+      final cleaned = value.replaceAll(r'\\/', '/').replaceAll('&amp;', '&').trim();
+      if (cleaned.startsWith('https://') || cleaned.startsWith('http://')) {
+        urls.add(cleaned.replaceFirst('http://', 'https://'));
       } else {
         try {
           final decoded = DES(key: '38346591'.codeUnits, mode: DESMode.ECB, paddingType: DESPaddingType.PKCS5).decrypt(base64.decode(value.trim()));
-          final url = utf8.decode(decoded).replaceAll('\\u0000', '').trim();
+          final url = utf8.decode(decoded).replaceAll('\\u0000', '').trim().replaceAll(r'\\/', '/').replaceAll('&amp;', '&');
           if (url.startsWith('https://') || url.startsWith('http://')) urls.add(url.replaceFirst('http://', 'https://'));
         } catch (_) {}
       }
@@ -217,7 +219,8 @@ class JioSaavnPlayer {
     Object? primaryError;
     Object? fallbackError;
     final preferred = bitrate;
-    final qualities = <String>[preferred, ...['320', '160', '96'].where((q) => q != preferred)];
+    final supported = song.has320kbps == false ? <String>['160', '96'] : <String>['320', '160', '96'];
+    final qualities = <String>[if (supported.contains(preferred)) preferred, ...supported.where((q) => q != preferred)];
     for (final quality in qualities) {
       try {
         final url = await resolveAudioUrl(song, quality);
