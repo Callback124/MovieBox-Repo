@@ -343,7 +343,8 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
                 children: [
                   Row(children: [
                     _glassButton(Icons.keyboard_arrow_down_rounded, () => Navigator.maybePop(context), size: 46),
-                      const Text('Now Playing', style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800)),
+                    const Spacer(),
+                    const Text('Now Playing', style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800)),
                     const Spacer(),
                     _glassButton(Icons.more_horiz_rounded, _more, size: 46),
                   ]),
@@ -400,7 +401,7 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
                     }),
                     _glassButton(Icons.skip_next_rounded, p.next, size: 58, iconSize: 30),
                   ]),
-                  SizedBox(height: compact ? 24 : 34),
+                  const Spacer(),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                     IconButton(onPressed: () async { shuffle = !shuffle; await p.audio.setShuffleModeEnabled(shuffle); if (mounted) setState(() {}); },
                       color: Colors.white, icon: Icon(Icons.shuffle_rounded, color: shuffle ? const Color(0xFF7B26E8) : Colors.white)),
