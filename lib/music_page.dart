@@ -316,10 +316,6 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
                     return Column(children: [
                       SliderTheme(
                         data: SliderTheme.of(context).copyWith(
-                          activeTrackColor: Colors.white,
-                          inactiveTrackColor: Colors.white54,
-                          thumbColor: Colors.white,
-                          overlayColor: Colors.white24,
                           trackHeight: 6,
                           activeTrackColor: const Color(0xFFB9F4FF),
                           inactiveTrackColor: Colors.white24,
