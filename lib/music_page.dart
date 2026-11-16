@@ -446,7 +446,7 @@ class _SaavnCollectionPageState extends State<SaavnCollectionPage> {
     Widget placeholder() => const ColoredBox(color: Color(0xFFF1F2F4), child: Center(child: Icon(Icons.music_note, size: 42)));
     Widget cover() => image.isEmpty ? placeholder() : Image.network(image, fit: BoxFit.cover, loadingBuilder: (_, child, progress) => progress == null ? child : placeholder(), errorBuilder: (_, __, ___) => placeholder());
     return SliverToBoxAdapter(child: Column(children: [
-      SizedBox(height: 290, child: Stack(fit: StackFit.expand, children: [cover(), DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black38, cs.surface], stops: const [.25, 1])))])),
+      SizedBox(height: 380, child: Stack(fit: StackFit.expand, children: [cover(), DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black38, cs.surface], stops: const [.25, 1])))])),
       Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 14), child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         SizedBox(width: 110, child: ClipRRect(borderRadius: BorderRadius.circular(10), child: AspectRatio(aspectRatio: 2/3, child: cover()))), const SizedBox(width: 16),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)), const SizedBox(height: 6), Text(subtitle), const SizedBox(height: 12),
@@ -495,7 +495,7 @@ class _SaavnArtistPageState extends State<SaavnArtistPage> {
     final cs = Theme.of(context).colorScheme;
     Widget placeholder() => const ColoredBox(color: Color(0xFFF1F2F4), child: Center(child: Icon(Icons.person, size: 42)));
     return CustomScrollView(slivers: [
-      SliverAppBar(pinned: true, expandedHeight: 290, flexibleSpace: FlexibleSpaceBar(background: Stack(fit: StackFit.expand, children: [
+      SliverAppBar(pinned: true, expandedHeight: 380, flexibleSpace: FlexibleSpaceBar(background: Stack(fit: StackFit.expand, children: [
         if (image.isNotEmpty) Image.network(image, fit: BoxFit.cover, loadingBuilder: (_, child, progress) => progress == null ? child : placeholder(), errorBuilder: (_, __, ___) => const SizedBox.shrink()),
         DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black38, cs.surface], stops: const [.25, 1])))
       ]))),

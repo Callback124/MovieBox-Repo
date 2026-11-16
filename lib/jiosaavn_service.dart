@@ -154,13 +154,46 @@ class JioSaavnPlayer {
     await _createAudioPlayerOnce();
     queue..clear()..addAll(songs); index = start.clamp(0, queue.length - 1).toInt(); revision.value++; await playCurrent();
   }
+  Future<List<String>> _fallbackAudioUrls(SaavnSong song) async {
+    // Public Saavn.dev response exposes ready-to-play quality URLs and is used
+    // only when the primary JioSaavn encrypted CDN URL cannot be opened.
+    final uri = Uri.https('saavn.dev', '/api/songs/${song.id}');
+    final response = await http.get(uri, headers: {
+      'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36',
+      'Accept': 'application/json',
+    }).timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) throw Exception('Fallback stream HTTP ${response.statusCode}');
+    final root = jsonDecode(utf8.decode(response.bodyBytes));
+    dynamic data = root is Map ? (root['data'] ?? root) : root;
+    if (data is! Map) throw Exception('Fallback stream response invalid');
+    final links = data['downloadUrl'] ?? data['download_url'] ?? data['downloadUrls'];
+    if (links is List) {
+      final ranked = <Map<String, dynamic>>[];
+      for (final row in links.whereType<Map>()) {
+        final url = (row['url'] ?? row['link'] ?? '').toString();
+        if (url.startsWith('http')) ranked.add({'url': url, 'quality': (row['quality'] ?? '').toString()});
+      }
+      ranked.sort((a, b) {
+        int rank(String q) => int.tryParse(RegExp(r'\\d+').firstMatch(q)?.group(0) ?? '') ?? 0;
+        return rank(b['quality'] as String).compareTo(rank(a['quality'] as String));
+      });
+      if (ranked.isNotEmpty) return ranked.map((e) => e['url'] as String).toList();
+    }
+    final direct = (data['url'] ?? data['media_url'] ?? '').toString();
+    if (direct.startsWith('http')) return [direct];
+    throw Exception('Fallback stream URL missing');
+  }
+
   Future<String> resolveAudioUrl(SaavnSong song, String quality) async {
     var encrypted = song.encryptedUrl;
     if (encrypted.isEmpty) { final d = await api.songDetails(song.id); final more = d['more_info']; encrypted = (d['encrypted_media_url'] ?? (more is Map ? more['encrypted_media_url'] : null) ?? '').toString(); }
     if (encrypted.isEmpty) throw Exception('Audio URL not available');
-    final decrypted = DES(key: '38346591'.codeUnits, mode: DESMode.ECB, paddingType: DESPaddingType.PKCS5).decrypt(base64.decode(encrypted.trim()));
-    var url = utf8.decode(decrypted).trim();
-    url = url.replaceAllMapped(RegExp(r'_\d+\.(mp4|m4a)', caseSensitive: false), (m) => '_$quality.${m[1]}').replaceFirst('http://', 'https://');
+    final decoded = base64.decode(encrypted.trim());
+    final decrypted = DES(key: '38346591'.codeUnits, mode: DESMode.ECB, paddingType: DESPaddingType.PKCS5).decrypt(decoded);
+    var url = utf8.decode(decrypted).replaceAll('\\u0000', '').trim();
+    if (!url.startsWith('http')) throw Exception('Decrypted audio URL invalid');
+    url = url.replaceFirst('http://', 'https://');
+    url = url.replaceAllMapped(RegExp(r'_\\d+\\.(mp4|m4a)', caseSensitive: false), (m) => '_$quality.${m[1]}');
     return url;
   }
   static Future<void>? _backgroundAudioInit;
@@ -199,7 +232,17 @@ class JioSaavnPlayer {
         lastError = e;
       }
     }
-    throw Exception('Unable to play this JioSaavn track: $lastError');
+    try {
+      final fallbackUrls = await _fallbackAudioUrls(song);
+      for (final url in fallbackUrls) {
+        try {
+          await _setSongSource(song, url);
+          await audio.play();
+          return;
+        } catch (e) { lastError = e; }
+      }
+    } catch (e) { lastError = e; }
+    throw Exception('Unable to play this JioSaavn track. Primary and fallback stream failed: $lastError');
   }
   Future<void> stopAndClear() async { await audio.stop(); queue.clear(); index = -1; revision.value++; }
   Future<void> next() async { if (queue.isEmpty) return; index = (index + 1) % queue.length; revision.value++; await playCurrent(); }
