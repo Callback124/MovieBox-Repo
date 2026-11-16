@@ -152,8 +152,8 @@ class JioSaavnPlayer {
   bool _restoreMiniAfterVideo = false;
 
   Future<void> pauseForVideo() async {
-    _restoreMiniAfterVideo = _restoreMiniAfterVideo ||
-        (miniPlayerVisible.value && _audio?.playing == true);
+    // Preserve visibility even when the song was already paused.
+    _restoreMiniAfterVideo = _restoreMiniAfterVideo || miniPlayerVisible.value;
     miniPlayerVisible.value = false;
     if (_audio?.playing == true) await _audio!.pause();
   }

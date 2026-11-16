@@ -118,7 +118,10 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
       isScrollControlled: false,
       builder: (sheetContext) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+          padding: EdgeInsets.fromLTRB(
+            16, 4, 16,
+            24 + (JioSaavnPlayer.instance.miniPlayerVisible.value ? 82 : 0),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

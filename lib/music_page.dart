@@ -245,7 +245,14 @@ class _MusicMiniPlayerState extends State<MusicMiniPlayer> with SingleTickerProv
     builder: (context, _, __) {
       final song = p.current;
       if (song == null) return const SizedBox.shrink();
-      return Container(
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SaavnFullPlayer()),
+          ),
+          child: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(begin: Alignment.centerLeft, end: Alignment.centerRight,
             colors: [Color(0xFF087B91), Color(0xFF536B91), Color(0xFF06143D)]),
@@ -287,6 +294,8 @@ class _MusicMiniPlayerState extends State<MusicMiniPlayer> with SingleTickerProv
             const SizedBox(width: 4),
           ]),
         )),
+          ),
+        ),
       );
     },
   );
@@ -376,9 +385,9 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
 
   @override
   void dispose() {
-    // Returning from the full player restores the mini player only while audio
-    // is still active; stopping/closing music leaves it hidden.
-    if (p.current != null && p.audio.playing) {
+    // Restore the mini player on return even if the song is paused.
+    // stopAndClear() clears the current track, so a closed player stays hidden.
+    if (p.current != null) {
       p.miniPlayerVisible.value = true;
     }
     super.dispose();
