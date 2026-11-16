@@ -339,7 +339,7 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
             child: Padding(
               padding: EdgeInsets.fromLTRB(20, compact ? 8 : 14, 20, compact ? 8 : 14),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                mainAxisAlignment: MainAxisAlignment.start,
                 children: [
                   Row(children: [
                     _glassButton(Icons.keyboard_arrow_down_rounded, () => Navigator.maybePop(context), size: 46),
@@ -347,6 +347,7 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
                     const Spacer(),
                     _glassButton(Icons.more_horiz_rounded, _more, size: 46),
                   ]),
+                  SizedBox(height: compact ? 16 : 24),
                   Center(child: Container(
                     width: artSize, height: artSize, padding: const EdgeInsets.all(7),
                     decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0x6695B6CD),
@@ -356,16 +357,20 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
                       loadingBuilder: (_, child, progress) => progress == null ? child : const ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, size: 80, color: Colors.white70)),
                       errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, size: 80, color: Colors.white70)))),
                   )),
+                  SizedBox(height: compact ? 18 : 28),
                   Text(s.title, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: Colors.white, fontSize: compact ? 23 : 29, fontWeight: FontWeight.w800, letterSpacing: .2)),
+                  SizedBox(height: compact ? 8 : 12),
                   Text(s.artist, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: Color(0xFFF0F5FF), fontSize: 17)),
+                  SizedBox(height: compact ? 16 : 22),
                   Row(children: [
                     IconButton(onPressed: _queue, color: Colors.white, icon: const Icon(Icons.queue_music_rounded, size: 26)),
                     const Spacer(),
                     IconButton(onPressed: () => setState(() => liked = !liked),
                       color: Colors.white, icon: Icon(liked ? Icons.favorite : Icons.favorite_border, size: 26)),
                   ]),
+                  SizedBox(height: compact ? 8 : 14),
                   StreamBuilder<Duration>(stream: p.audio.positionStream, builder: (context, snap) {
                     final pos = snap.data ?? Duration.zero;
                     final total = p.audio.duration ?? Duration(seconds: s.duration > 0 ? s.duration : 1);
@@ -381,6 +386,7 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
                       Text(time(total), style: const TextStyle(color: Colors.white, fontSize: 12)),
                     ]);
                   }),
+                  SizedBox(height: compact ? 22 : 32),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
                     _glassButton(Icons.skip_previous_rounded, p.previous, size: 58, iconSize: 30),
                     StreamBuilder<PlayerState>(stream: p.audio.playerStateStream, builder: (context, snap) {
@@ -394,7 +400,7 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
                     }),
                     _glassButton(Icons.skip_next_rounded, p.next, size: 58, iconSize: 30),
                   ]),
-                  const Spacer(),
+                  SizedBox(height: compact ? 24 : 34),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                     IconButton(onPressed: () async { shuffle = !shuffle; await p.audio.setShuffleModeEnabled(shuffle); if (mounted) setState(() {}); },
                       color: Colors.white, icon: Icon(Icons.shuffle_rounded, color: shuffle ? const Color(0xFF7B26E8) : Colors.white)),
