@@ -43,7 +43,7 @@ Future<void> _playSaavnAndOpen(BuildContext context, List<SaavnSong> songs, {int
   if (songs.isEmpty) return;
   try {
     await JioSaavnPlayer.instance.playList(songs, start: start);
-    if (context.mounted) await Navigator.push(context, MaterialPageRoute(builder: (_) => const SaavnFullPlayer()));
+    if (context.mounted) await Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => const SaavnFullPlayer()));
   } catch (e) {
     if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Playback failed: $e')));
   }
@@ -320,8 +320,13 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
                           inactiveTrackColor: Colors.white54,
                           thumbColor: Colors.white,
                           overlayColor: Colors.white24,
-                          trackHeight: 3,
-                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                          trackHeight: 6,
+                          activeTrackColor: const Color(0xFFB9F4FF),
+                          inactiveTrackColor: Colors.white24,
+                          thumbColor: const Color(0xFFFFFFFF),
+                          overlayColor: const Color(0x447DEBFF),
+                          trackShape: const RoundedRectSliderTrackShape(),
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8, elevation: 5, pressedElevation: 8),
                         ),
                         child: Slider(
                           min: 0, max: max, value: value,
@@ -397,17 +402,24 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
   Future<void> _lyrics() async {
     final song = p.current; if (song == null) return;
     showModalBottomSheet<void>(context: context, isScrollControlled: true, showDragHandle: true,
-      builder: (_) => FutureBuilder<String>(future: p.api.lyrics(song), builder: (ctx, snap) => SizedBox(height: MediaQuery.sizeOf(ctx).height * .7,
-        child: Padding(padding: const EdgeInsets.all(22), child: snap.connectionState == ConnectionState.waiting
-          ? const Center(child: CircularProgressIndicator()) : SingleChildScrollView(child: Text(snap.data ?? 'Lyrics unavailable', style: const TextStyle(height: 1.7)))))));
+      builder: (_) => FutureBuilder<String>(future: p.api.lyrics(song), builder: (ctx, snap) => SizedBox(width: MediaQuery.sizeOf(ctx).width, height: MediaQuery.sizeOf(ctx).height * .7,
+        child: Padding(padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18), child: SizedBox(width: double.infinity, child: snap.connectionState == ConnectionState.waiting
+          ? const Center(child: CircularProgressIndicator()) : SingleChildScrollView(child: SizedBox(width: double.infinity, child: Text((snap.data?.trim().isNotEmpty == true) ? snap.data! : 'Lyrics unavailable', textAlign: TextAlign.center, style: const TextStyle(height: 1.7)))))))));
   }
 
   void _queue() {
     showModalBottomSheet<void>(context: context, isScrollControlled: true, showDragHandle: true,
-      builder: (ctx) => SizedBox(height: MediaQuery.sizeOf(ctx).height * .7, child: ListView(children: [
-        const ListTile(title: Text('Up next')),
-        for (var i = 0; i < p.queue.length; i++) ListTile(title: Text(p.queue[i].title), subtitle: Text(p.queue[i].artist),
-          selected: i == p.index, onTap: () async { p.index = i; p.revision.value++; await p.playCurrent(); if (ctx.mounted) Navigator.pop(ctx); })
+      builder: (ctx) => SizedBox(width: MediaQuery.sizeOf(ctx).width, height: MediaQuery.sizeOf(ctx).height * .78, child: Column(children: [
+        const Padding(padding: EdgeInsets.all(16), child: Align(alignment: Alignment.centerLeft, child: Text('Up next', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)))),
+        Expanded(child: GridView.builder(padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 150, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .48),
+          itemCount: p.queue.length,
+          itemBuilder: (context, i) { final song = p.queue[i]; return PosterCard(
+            item: Item(pid: 'jiosaavn', id: song.id, type: 'music', title: song.title, poster: song.image),
+            subtitle: song.artist,
+            onTap: () async { p.index = i; p.revision.value++; await p.playCurrent(); if (ctx.mounted) Navigator.pop(ctx); },
+          ); },
+        )),
       ])));
   }
 }

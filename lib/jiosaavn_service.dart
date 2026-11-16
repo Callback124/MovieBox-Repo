@@ -139,7 +139,7 @@ class JioSaavnPlayer {
     await _ensureBackgroundAudio();
     final player = AudioPlayer(userAgent: 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36', useProxyForRequestHeaders: false);
     player.playerStateStream.listen((state) {
-      if (state.processingState == ProcessingState.completed) next();
+      if (state.processingState == ProcessingState.completed) { if (queue.length > 1 && index < queue.length - 1) { next(); } else { audio.pause(); audio.seek(Duration.zero); } }
     });
     _audio = player;
     return player;
@@ -245,8 +245,8 @@ class JioSaavnPlayer {
     throw Exception('JioSaavn stream failed. Primary: $primaryError. Fresh JioSaavn URL retry: $fallbackError');
   }
   Future<void> stopAndClear() async { await audio.stop(); queue.clear(); index = -1; revision.value++; }
-  Future<void> next() async { if (queue.isEmpty) return; index = (index + 1) % queue.length; revision.value++; await playCurrent(); }
-  Future<void> previous() async { if (queue.isEmpty) return; if (audio.position > const Duration(seconds: 3)) { await audio.seek(Duration.zero); return; } index = (index - 1 + queue.length) % queue.length; revision.value++; await playCurrent(); }
+  Future<void> next() async { if (queue.isEmpty) return; if (index >= queue.length - 1) { await audio.pause(); await audio.seek(Duration.zero); return; } index++; revision.value++; await playCurrent(); }
+  Future<void> previous() async { if (queue.isEmpty) return; if (audio.position > const Duration(seconds: 3)) { await audio.seek(Duration.zero); return; } if (index <= 0) { await audio.seek(Duration.zero); return; } index--; revision.value++; await playCurrent(); }
   Future<void> setQuality(String value) async {
     bitrate = value; if (current != null) { final wasPlaying = audio.playing; final pos = audio.position; await audio.pause(); final url = await resolveAudioUrl(current!, value); await _setSongSource(current!, url); await audio.seek(pos); if (wasPlaying) await audio.play(); }
   }
