@@ -265,106 +265,105 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
       if (s == null) return const Scaffold(body: Center(child: Text('Nothing playing')));
       final size = MediaQuery.sizeOf(context);
       final compact = size.height < 760;
+      final artSize = (size.width * .66).clamp(180.0, compact ? 250.0 : 310.0);
       return Scaffold(
         backgroundColor: const Color(0xFF071B46),
-        body: Stack(fit: StackFit.expand, children: [
-          DecoratedBox(decoration: const BoxDecoration(gradient: LinearGradient(
+        body: DecoratedBox(
+          decoration: const BoxDecoration(gradient: LinearGradient(
             begin: Alignment.topLeft, end: Alignment.bottomRight,
             colors: [Color(0xFF087B91), Color(0xFF536B91), Color(0xFF06143D)],
-          ))),
-          SafeArea(child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(38),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0x99B9D3E4),
-                  border: Border.all(color: const Color(0xBFEAF7FF), width: 1.5),
-                  borderRadius: BorderRadius.circular(38),
-                  boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 28, offset: Offset(0, 12))],
-                ),
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(22, compact ? 12 : 20, 22, 18),
-                  child: Column(children: [
-                    Row(children: [
-                      _glassButton(Icons.keyboard_arrow_down_rounded, () => Navigator.maybePop(context), size: 48),
-                      const Spacer(),
-                      const Text('Now Playing', style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800)),
-                      const Spacer(),
-                      _glassButton(Icons.more_horiz_rounded, _more, size: 48),
-                    ]),
-                    SizedBox(height: compact ? 24 : 48),
-                    Center(child: Container(
-                      width: (size.width * .68).clamp(190.0, 330.0),
-                      height: (size.width * .68).clamp(190.0, 330.0),
-                      padding: const EdgeInsets.all(9),
-                      decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0x6695B6CD),
-                        border: Border.all(color: const Color(0x99E9F6FF), width: 2),
-                        boxShadow: const [BoxShadow(color: Color(0x55708DA9), blurRadius: 20, spreadRadius: 2)]),
-                      child: ClipOval(child: Image.network(s.image, fit: BoxFit.cover,
-                        loadingBuilder: (_, child, progress) => progress == null ? child : const ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, size: 80, color: Colors.white70)),
-                        errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, size: 80, color: Colors.white70)))),
-                    )),
-                    SizedBox(height: compact ? 24 : 42),
-                    Text(s.title, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: Colors.white, fontSize: compact ? 25 : 32, fontWeight: FontWeight.w800, letterSpacing: .2)),
-                    const SizedBox(height: 6),
-                    Text(s.artist, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Color(0xFFF0F5FF), fontSize: 18)),
-                    const SizedBox(height: 12),
-                    Row(children: [
-                      IconButton(onPressed: _queue, color: Colors.white, icon: const Icon(Icons.queue_music_rounded, size: 28)),
-                      const Spacer(),
-                      IconButton(onPressed: () => setState(() => liked = !liked),
-                        color: Colors.white, icon: Icon(liked ? Icons.favorite : Icons.favorite_border, size: 28)),
-                    ]),
-                    const SizedBox(height: 4),
-                    StreamBuilder<Duration>(stream: p.audio.positionStream, builder: (context, snap) {
-                      final pos = snap.data ?? Duration.zero;
-                      final total = p.audio.duration ?? Duration(seconds: s.duration > 0 ? s.duration : 1);
-                      final max = total.inMilliseconds.toDouble().clamp(1, double.infinity);
-                      return Column(children: [
-                        SizedBox(height: 56, child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                          Text(time(pos), style: const TextStyle(color: Colors.white, fontSize: 12)),
-                          const SizedBox(width: 8),
-                          Expanded(child: GestureDetector(
-                            onTapDown: (d) { final box = context.findRenderObject() as RenderBox?; if (box != null) { final local = box.globalToLocal(d.globalPosition); final ratio = (local.dx / box.size.width).clamp(0.0, 1.0); p.audio.seek(Duration(milliseconds: (ratio * max).round())); } },
-                            child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, crossAxisAlignment: CrossAxisAlignment.center,
-                              children: List.generate(44, (i) { final h = [10,17,24,14,31,19,38,22,13,29,42,20,34,16,27,45,18,31,23,39,15,28][i % 22].toDouble(); return Container(width: 2.4, height: h, decoration: BoxDecoration(color: Colors.white.withOpacity(i / 44 < pos.inMilliseconds / max ? 1 : .72), borderRadius: BorderRadius.circular(3))); })),
-                          )),
-                          const SizedBox(width: 8),
-                          Text(time(total), style: const TextStyle(color: Colors.white, fontSize: 12)),
-                        ])),
-                      ]);
-                    }),
-                    SizedBox(height: compact ? 14 : 28),
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-                      _glassButton(Icons.skip_previous_rounded, p.previous, size: 62, iconSize: 32),
-                      StreamBuilder<PlayerState>(stream: p.audio.playerStateStream, builder: (context, snap) {
-                        final playing = snap.data?.playing == true;
-                        return GestureDetector(onTap: () => playing ? p.audio.pause() : p.audio.play(),
-                          child: Container(width: 88, height: 88, decoration: BoxDecoration(shape: BoxShape.circle,
-                            gradient: const LinearGradient(colors: [Color(0xFF7B26E8), Color(0xFFDF0AD6)]),
-                            border: Border.all(color: const Color(0xFFD9E7F5), width: 7),
-                            boxShadow: const [BoxShadow(color: Color(0x55751DDA), blurRadius: 18)]),
-                            child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 42)));
-                      }),
-                      _glassButton(Icons.skip_next_rounded, p.next, size: 62, iconSize: 32),
-                    ]),
-                    SizedBox(height: compact ? 18 : 36),
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      IconButton(onPressed: () async { shuffle = !shuffle; await p.audio.setShuffleModeEnabled(shuffle); if (mounted) setState(() {}); },
-                        color: Colors.white, icon: Icon(Icons.shuffle_rounded, color: shuffle ? const Color(0xFF7B26E8) : Colors.white)),
-                      TextButton(onPressed: _lyrics, child: const Text('Lyrics', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800))),
-                      IconButton(onPressed: () async { repeat = !repeat; await p.audio.setLoopMode(repeat ? LoopMode.one : LoopMode.off); if (mounted) setState(() {}); },
-                        color: Colors.white, icon: Icon(Icons.repeat_rounded, color: repeat ? const Color(0xFF7B26E8) : Colors.white)),
-                    ]),
+          )),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, compact ? 8 : 14, 20, compact ? 8 : 14),
+              child: Column(
+                children: [
+                  Row(children: [
+                    _glassButton(Icons.keyboard_arrow_down_rounded, () => Navigator.maybePop(context), size: 46),
+                    const Spacer(),
+                    const Text('Now Playing', style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800)),
+                    const Spacer(),
+                    _glassButton(Icons.more_horiz_rounded, _more, size: 46),
                   ]),
-                ),
+                  SizedBox(height: compact ? 12 : 22),
+                  Center(child: Container(
+                    width: artSize, height: artSize, padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0x6695B6CD),
+                      border: Border.all(color: const Color(0x99E9F6FF), width: 2),
+                      boxShadow: const [BoxShadow(color: Color(0x55708DA9), blurRadius: 20, spreadRadius: 2)]),
+                    child: ClipOval(child: Image.network(s.image, fit: BoxFit.cover,
+                      loadingBuilder: (_, child, progress) => progress == null ? child : const ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, size: 80, color: Colors.white70)),
+                      errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, size: 80, color: Colors.white70)))),
+                  )),
+                  SizedBox(height: compact ? 12 : 20),
+                  Text(s.title, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.white, fontSize: compact ? 23 : 29, fontWeight: FontWeight.w800, letterSpacing: .2)),
+                  const SizedBox(height: 4),
+                  Text(s.artist, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Color(0xFFF0F5FF), fontSize: 17)),
+                  const SizedBox(height: 6),
+                  Row(children: [
+                    IconButton(onPressed: _queue, color: Colors.white, icon: const Icon(Icons.queue_music_rounded, size: 26)),
+                    const Spacer(),
+                    IconButton(onPressed: () => setState(() => liked = !liked),
+                      color: Colors.white, icon: Icon(liked ? Icons.favorite : Icons.favorite_border, size: 26)),
+                  ]),
+                  StreamBuilder<Duration>(stream: p.audio.positionStream, builder: (context, snap) {
+                    final pos = snap.data ?? Duration.zero;
+                    final total = p.audio.duration ?? Duration(seconds: s.duration > 0 ? s.duration : 1);
+                    final max = total.inMilliseconds.toDouble().clamp(1.0, double.infinity);
+                    final value = pos.inMilliseconds.toDouble().clamp(0.0, max);
+                    return Column(children: [
+                      SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          activeTrackColor: Colors.white,
+                          inactiveTrackColor: Colors.white54,
+                          thumbColor: Colors.white,
+                          overlayColor: Colors.white24,
+                          trackHeight: 3,
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                        ),
+                        child: Slider(
+                          min: 0, max: max, value: value,
+                          onChanged: (v) => p.audio.seek(Duration(milliseconds: v.round())),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                          Text(time(pos), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                          Text(time(total), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                        ]),
+                      ),
+                    ]);
+                  }),
+                  SizedBox(height: compact ? 8 : 16),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+                    _glassButton(Icons.skip_previous_rounded, p.previous, size: 58, iconSize: 30),
+                    StreamBuilder<PlayerState>(stream: p.audio.playerStateStream, builder: (context, snap) {
+                      final playing = snap.data?.playing == true;
+                      return GestureDetector(onTap: () => playing ? p.audio.pause() : p.audio.play(),
+                        child: Container(width: 82, height: 82, decoration: BoxDecoration(shape: BoxShape.circle,
+                          gradient: const LinearGradient(colors: [Color(0xFF7B26E8), Color(0xFFDF0AD6)]),
+                          border: Border.all(color: const Color(0xFFD9E7F5), width: 6),
+                          boxShadow: const [BoxShadow(color: Color(0x55751DDA), blurRadius: 18)]),
+                          child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 40)));
+                    }),
+                    _glassButton(Icons.skip_next_rounded, p.next, size: 58, iconSize: 30),
+                  ]),
+                  const Spacer(),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    IconButton(onPressed: () async { shuffle = !shuffle; await p.audio.setShuffleModeEnabled(shuffle); if (mounted) setState(() {}); },
+                      color: Colors.white, icon: Icon(Icons.shuffle_rounded, color: shuffle ? const Color(0xFF7B26E8) : Colors.white)),
+                    TextButton(onPressed: _lyrics, child: const Text('Lyrics', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800))),
+                    IconButton(onPressed: () async { repeat = !repeat; await p.audio.setLoopMode(repeat ? LoopMode.one : LoopMode.off); if (mounted) setState(() {}); },
+                      color: Colors.white, icon: Icon(Icons.repeat_rounded, color: repeat ? const Color(0xFF7B26E8) : Colors.white)),
+                  ]),
+                ],
               ),
             ),
-          )),
-        ]),
+          ),
+        ),
       );
     },
   );
