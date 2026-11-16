@@ -360,16 +360,17 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
                   SizedBox(height: compact ? 12 : 20),
                   Text(s.title, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: Colors.white, fontSize: compact ? 23 : 29, fontWeight: FontWeight.w800, letterSpacing: .2)),
-                  const SizedBox(height: 4),
+                  SizedBox(height: compact ? 7 : 10),
                   Text(s.artist, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: Color(0xFFF0F5FF), fontSize: 17)),
-                  const SizedBox(height: 6),
+                  SizedBox(height: compact ? 12 : 18),
                   Row(children: [
                     IconButton(onPressed: _queue, color: Colors.white, icon: const Icon(Icons.queue_music_rounded, size: 26)),
                     const Spacer(),
                     IconButton(onPressed: () => setState(() => liked = !liked),
                       color: Colors.white, icon: Icon(liked ? Icons.favorite : Icons.favorite_border, size: 26)),
                   ]),
+                  SizedBox(height: compact ? 5 : 10),
                   StreamBuilder<Duration>(stream: p.audio.positionStream, builder: (context, snap) {
                     final pos = snap.data ?? Duration.zero;
                     final total = p.audio.duration ?? Duration(seconds: s.duration > 0 ? s.duration : 1);
@@ -385,7 +386,7 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
                       Text(time(total), style: const TextStyle(color: Colors.white, fontSize: 12)),
                     ]);
                   }),
-                  SizedBox(height: compact ? 8 : 16),
+                  SizedBox(height: compact ? 18 : 26),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
                     _glassButton(Icons.skip_previous_rounded, p.previous, size: 58, iconSize: 30),
                     StreamBuilder<PlayerState>(stream: p.audio.playerStateStream, builder: (context, snap) {
