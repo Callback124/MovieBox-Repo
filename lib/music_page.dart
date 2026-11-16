@@ -366,6 +366,24 @@ class SaavnFullPlayer extends StatefulWidget {
 class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
   final p = JioSaavnPlayer.instance;
   bool shuffle = false, repeat = false, liked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // The full-screen player replaces the mini player while this route is open.
+    p.miniPlayerVisible.value = false;
+  }
+
+  @override
+  void dispose() {
+    // Returning from the full player restores the mini player only while audio
+    // is still active; stopping/closing music leaves it hidden.
+    if (p.current != null && p.audio.playing) {
+      p.miniPlayerVisible.value = true;
+    }
+    super.dispose();
+  }
+
   String time(Duration d) => '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
 
   @override

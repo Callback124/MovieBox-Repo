@@ -962,6 +962,9 @@ class _PlayerPageState extends State<PlayerPage> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark);
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    // Video playback temporarily hides the music mini player. Restore its
+    // visibility when this ExoPlayer route is closed; keep the song paused.
+    JioSaavnPlayer.instance.restoreMiniAfterVideo();
     super.dispose();
   }
 
