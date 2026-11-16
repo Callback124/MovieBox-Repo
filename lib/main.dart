@@ -32,7 +32,23 @@ ThemeData _lightTheme() {
 class MovieFoxApp extends StatelessWidget {
   const MovieFoxApp({super.key});
   @override
-  Widget build(BuildContext context) => MaterialApp(title: 'MovieFox', debugShowCheckedModeBanner: false, theme: _lightTheme(), home: const MovieFoxShell());
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'MovieFox',
+    debugShowCheckedModeBanner: false,
+    theme: _lightTheme(),
+    home: const MovieFoxShell(),
+    builder: (context, child) => Stack(
+      children: [
+        Positioned.fill(child: child ?? const SizedBox.shrink()),
+        ValueListenableBuilder<bool>(
+          valueListenable: JioSaavnPlayer.instance.miniPlayerVisible,
+          builder: (context, visible, _) => visible
+              ? const Positioned(left: 0, right: 0, bottom: 0, child: Material(elevation: 18, child: MusicMiniPlayer()))
+              : const SizedBox.shrink(),
+        ),
+      ],
+    ),
+  );
 }
 
 class MovieFoxShell extends StatefulWidget {
@@ -174,12 +190,7 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
           ],
         ) : null,
         body: IndexedStack(index: _page, children: _pages),
-        bottomNavigationBar: ValueListenableBuilder<bool>(
-          valueListenable: JioSaavnPlayer.instance.miniPlayerVisible,
-          builder: (context, visible, _) => visible
-              ? const MusicMiniPlayer()
-              : const SizedBox.shrink(),
-        ),
+
       ),
     ),
   );
