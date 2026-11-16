@@ -306,7 +306,7 @@ class _SaavnCollectionPageState extends State<SaavnCollectionPage>{
           ])),
         ]))),
         SliverPadding(padding:const EdgeInsets.fromLTRB(14,0,14,22),sliver:SliverGrid.builder(
-          gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:2,crossAxisSpacing:12,mainAxisSpacing:12,childAspectRatio:.48),
+          gridDelegate:const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 150, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .48),
           itemCount:rows.length,
           itemBuilder:(context,i){final song=rows[i];return InkWell(
             borderRadius:BorderRadius.circular(12),
@@ -338,7 +338,7 @@ class _SaavnArtistPageState extends State<SaavnArtistPage>{
       const Padding(padding:EdgeInsets.all(16),child:Text('Top Songs',style:TextStyle(fontWeight:FontWeight.bold,fontSize:19))),
       if (songs.isNotEmpty) Padding(padding: const EdgeInsets.symmetric(horizontal: 14), child: GridView.builder(
         shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .48),
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 150, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .48),
         itemCount: songs.length,
         itemBuilder: (context, i) { final song = songs[i]; return InkWell(onTap: () => _playSaavnAndOpen(context, songs, start: i), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(10), child: SizedBox.expand(child: Image.network(song.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 38)))))),
@@ -348,7 +348,7 @@ class _SaavnArtistPageState extends State<SaavnArtistPage>{
       const Padding(padding:EdgeInsets.all(16),child:Text('Top Albums',style:TextStyle(fontWeight:FontWeight.bold,fontSize:19))),
       if(albums is List) Padding(padding: const EdgeInsets.symmetric(horizontal: 14), child: GridView.builder(
         shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .48),
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 150, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .48),
         itemCount: albums.whereType<Map>().length,
         itemBuilder: (context, i) { final item = Map<String,dynamic>.from(albums.whereType<Map>().elementAt(i)); final image = img(item); return InkWell(onTap: () => Navigator.push(context,MaterialPageRoute(builder:(_)=>SaavnCollectionPage(item:item,playlist:false))), child: Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Expanded(child:ClipRRect(borderRadius:BorderRadius.circular(10),child:SizedBox.expand(child:image.isEmpty?const ColoredBox(color:Color(0xFFF1F2F4),child:Icon(Icons.album,size:38)):Image.network(image,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.album))))),
