@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'downloads_service.dart';
@@ -79,7 +80,7 @@ class _MusicPageState extends State<MusicPage> {
   String type(Map m){final t=(m['type']??m['media_type']??'').toString().toLowerCase();if(t.contains('artist')||m.containsKey('artistid'))return 'artist';if(t.contains('album')||m.containsKey('albumid'))return 'album';if(t.contains('song')||m.containsKey('encrypted_media_url'))return 'song';return 'playlist';}
   Future<void> _searchGenre(String genre) async { setState(() { searching = true; query.text = saavnClean(genre); tab = 0; songs = []; media = []; }); await search(query.text); }
   void open(Map<String,dynamic> m){final t=type(m);if(t=='artist'){Navigator.push(context,MaterialPageRoute(builder:(_)=>SaavnArtistPage(item:m)));}else if(t=='song'){final s=SaavnSong.fromJson(m);play([s],0);}else{Navigator.push(context,MaterialPageRoute(builder:(_)=>SaavnCollectionPage(item:m,playlist:t=='playlist')));}}
-  Future<void> play(List<SaavnSong> list,int i)async{try{await JioSaavnPlayer.instance.playList(list,start:i);if(mounted)Navigator.push(context,MaterialPageRoute(builder:(_)=>const SaavnFullPlayer()));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Playback failed: '+e.toString())));}}
+  Future<void> play(List<SaavnSong> list,int i) async => _playSaavnAndOpen(context, list, start: i);
   @override
   Widget build(BuildContext context)=>PopScope(canPop: !searching,onPopInvokedWithResult: (didPop, result){if(!didPop && searching){setState(()=>searching=false);}},child:CustomScrollView(slivers:[
     if(searching)SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.fromLTRB(16,0,16,12),child:Column(children:[
@@ -247,6 +248,69 @@ class MusicMiniPlayer extends StatelessWidget {
   ]))));});}
 }
 
+class SaavnWaveformSeekbar extends StatelessWidget {
+  const SaavnWaveformSeekbar({super.key, required this.position, required this.duration, required this.onSeek});
+  final Duration position;
+  final Duration duration;
+  final ValueChanged<Duration> onSeek;
+
+  void _seek(Offset local, double width) {
+    if (width <= 0 || duration.inMilliseconds <= 0) return;
+    final fraction = (local.dx / width).clamp(0.0, 1.0);
+    onSeek(Duration(milliseconds: (duration.inMilliseconds * fraction).round()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = duration.inMilliseconds;
+    final progress = total <= 0 ? 0.0 : (position.inMilliseconds / total).clamp(0.0, 1.0);
+    return LayoutBuilder(builder: (context, constraints) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (details) => _seek(details.localPosition, constraints.maxWidth),
+        onHorizontalDragStart: (details) => _seek(details.localPosition, constraints.maxWidth),
+        onHorizontalDragUpdate: (details) => _seek(details.localPosition, constraints.maxWidth),
+        child: SizedBox(
+          height: 58,
+          width: double.infinity,
+          child: CustomPaint(painter: _SaavnWaveformPainter(progress: progress)),
+        ),
+      );
+    });
+  }
+}
+
+class _SaavnWaveformPainter extends CustomPainter {
+  const _SaavnWaveformPainter({required this.progress});
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    const count =  seventy;
+    final gap = size.width / count;
+    final stroke = math.max(2.0, math.min(3.8, gap * .48));
+    final center = size.height / 2;
+    final played = Paint()..color = Colors.white..strokeWidth = stroke..strokeCap = StrokeCap.round;
+    final remaining = Paint()..color = Colors.white.withValues(alpha: .58)..strokeWidth = stroke..strokeCap = StrokeCap.round;
+    for (var i = 0; i < count; i++) {
+      final x = gap * (i + .5);
+      final wave = (math.sin(i * 1.71).abs() * .42) +
+          (math.sin(i * .47 + 1.2).abs() * .34) +
+          (math.sin(i * .19 + 2.4).abs() * .24);
+      final envelope = .22 + .78 * wave.clamp(0.0, 1.0);
+      final h = 5.0 + (size.height * .88 * envelope);
+      canvas.drawLine(Offset(x, center - h / 2), Offset(x, center + h / 2), x / size.width <= progress ? played : remaining);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SaavnWaveformPainter oldDelegate) => oldDelegate.progress != progress;
+
+  static const int seventy =  seventyValue;
+  static const int seventyValue = 70;
+}
+
 class SaavnFullPlayer extends StatefulWidget {
   const SaavnFullPlayer({super.key});
   @override
@@ -311,31 +375,16 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
                   StreamBuilder<Duration>(stream: p.audio.positionStream, builder: (context, snap) {
                     final pos = snap.data ?? Duration.zero;
                     final total = p.audio.duration ?? Duration(seconds: s.duration > 0 ? s.duration : 1);
-                    final max = total.inMilliseconds.toDouble().clamp(1.0, double.infinity);
-                    final value = pos.inMilliseconds.toDouble().clamp(0.0, max);
-                    return Column(children: [
-                      SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                          trackHeight: 6,
-                          activeTrackColor: const Color(0xFFB9F4FF),
-                          inactiveTrackColor: Colors.white24,
-                          thumbColor: const Color(0xFFFFFFFF),
-                          overlayColor: const Color(0x447DEBFF),
-                          trackShape: const RoundedRectSliderTrackShape(),
-                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8, elevation: 5, pressedElevation: 8),
-                        ),
-                        child: Slider(
-                          min: 0, max: max, value: value,
-                          onChanged: (v) => p.audio.seek(Duration(milliseconds: v.round())),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                          Text(time(pos), style: const TextStyle(color: Colors.white, fontSize: 12)),
-                          Text(time(total), style: const TextStyle(color: Colors.white, fontSize: 12)),
-                        ]),
-                      ),
+                    return Row(children: [
+                      Text(time(pos), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                      const SizedBox(width: 9),
+                      Expanded(child: SaavnWaveformSeekbar(
+                        position: pos,
+                        duration: total,
+                        onSeek: (value) => p.audio.seek(value),
+                      )),
+                      const SizedBox(width: 9),
+                      Text(time(total), style: const TextStyle(color: Colors.white, fontSize: 12)),
                     ]);
                   }),
                   SizedBox(height: compact ? 8 : 16),

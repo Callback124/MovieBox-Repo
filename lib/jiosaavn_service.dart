@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:dart_des/dart_des.dart';
@@ -226,7 +227,7 @@ class JioSaavnPlayer {
         final url = await resolveAudioUrl(song, quality);
         await _setSongSource(song, url);
         bitrate = quality;
-        await audio.play();
+        unawaited(audio.play().catchError((Object error) { debugPrint('JioSaavn playback stream error: $error'); }));
         return;
       } catch (e) {
         primaryError = e;
@@ -237,7 +238,7 @@ class JioSaavnPlayer {
       for (final url in fallbackUrls) {
         try {
           await _setSongSource(song, url);
-          await audio.play();
+          unawaited(audio.play().catchError((Object error) { debugPrint('JioSaavn fallback playback error: $error'); }));
           return;
         } catch (e) { fallbackError = e; }
       }
