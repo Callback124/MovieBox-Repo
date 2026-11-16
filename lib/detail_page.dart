@@ -102,6 +102,7 @@ class _DetailPageState extends State<DetailPage> {
                       children: [
                         if (isHttp(d.bg ?? d.poster))
                           CachedNetworkImage(
+                            cacheManager: AppImageCache.instance,
                             imageUrl: (d.bg ?? d.poster)!,
                             fit: BoxFit.cover,
                             memCacheWidth: 800,

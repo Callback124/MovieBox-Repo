@@ -104,7 +104,7 @@ class _MusicPageState extends State<MusicPage> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox.expand(
                 child: song.image.isEmpty ? const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42))
-                  : Image.network(song.image, fit: BoxFit.cover, loadingBuilder: (_, child, progress) => progress == null ? child : const ColoredBox(color: Color(0xFFF1F2F4), child: Center(child: Icon(Icons.music_note, size: 32))), errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42))),
+                  : AppCachedImage(imageUrl: song.image, memCacheWidth: 360, placeholder: const ColoredBox(color: Color(0xFFF1F2F4), child: Center(child: Icon(Icons.music_note, size: 32))), errorWidget: const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42))),
               ))),
               const SizedBox(height: 7),
               Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -120,7 +120,7 @@ class _MusicPageState extends State<MusicPage> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox.expand(
               child: image.isEmpty ? const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42))
-                : Image.network(image, fit: BoxFit.cover, loadingBuilder: (_, child, progress) => progress == null ? child : const ColoredBox(color: Color(0xFFF1F2F4), child: Center(child: Icon(Icons.music_note, size: 32))), errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42))),
+                : AppCachedImage(imageUrl: image, memCacheWidth: 360, placeholder: const ColoredBox(color: Color(0xFFF1F2F4), child: Center(child: Icon(Icons.music_note, size: 32))), errorWidget: const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42))),
             ))),
             const SizedBox(height: 7),
             Text(saavnClean(item['title'] ?? item['name'] ?? 'Music'), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -164,7 +164,7 @@ class _MusicPageState extends State<MusicPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: s.items.length,
             itemExtent: w + 12,
-            cacheExtent: w * 7,
+            cacheExtent: w * 2.5,
             itemBuilder: (context, i) {
               final m = s.items[i];
               final item = _saavnCard(m);
@@ -183,7 +183,7 @@ class _MusicPageState extends State<MusicPage> {
       ]),
     );
   }
-  Widget _songTile(SaavnSong s,List<SaavnSong> list)=>ListTile(leading:ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.network(s.image,width:50,height:50,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.music_note))),title:Text(s.title,maxLines:1),subtitle:Text(s.artist,maxLines:1),trailing:IconButton(icon:const Icon(Icons.more_vert),onPressed:()=>showModalBottomSheet<void>(context:context,builder:(ctx)=>SafeArea(child:Wrap(children:[
+  Widget _songTile(SaavnSong s,List<SaavnSong> list)=>ListTile(leading:ClipRRect(borderRadius:BorderRadius.circular(8),child:AppCachedImage(imageUrl:s.image,width:50,height:50,memCacheWidth:120,errorWidget:const Icon(Icons.music_note))),title:Text(s.title,maxLines:1),subtitle:Text(s.artist,maxLines:1),trailing:IconButton(icon:const Icon(Icons.more_vert),onPressed:()=>showModalBottomSheet<void>(context:context,builder:(ctx)=>SafeArea(child:Wrap(children:[
     ListTile(title:Text(s.title),subtitle:Text(s.artist)),
     ListTile(leading:const Icon(Icons.play_arrow),title:const Text('Play next'),onTap:(){final p=JioSaavnPlayer.instance;p.queue.insert((p.index+1).clamp(0,p.queue.length).toInt(),s);Navigator.pop(ctx);}),
     ListTile(leading:const Icon(Icons.queue_music),title:const Text('Add to queue'),onTap:(){JioSaavnPlayer.instance.queue.add(s);Navigator.pop(ctx);}),
@@ -270,8 +270,8 @@ class _MusicMiniPlayerState extends State<MusicMiniPlayer> with SingleTickerProv
             RotationTransition(
               turns: _spin,
               child: ClipOval(
-                child: Image.network(song.image, width: 54, height: 54, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const SizedBox(width: 54, height: 54, child: ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, color: Colors.white, size: 28)))),
+                child: AppCachedImage(imageUrl: song.image, width: 54, height: 54, memCacheWidth: 120,
+                  errorWidget: const SizedBox(width: 54, height: 54, child: ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, color: Colors.white, size: 28)))),
               ),
             ),
             const SizedBox(width: 12),
@@ -433,9 +433,9 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer> {
                     decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0x6695B6CD),
                       border: Border.all(color: const Color(0x99E9F6FF), width: 2),
                       boxShadow: const [BoxShadow(color: Color(0x55708DA9), blurRadius: 20, spreadRadius: 2)]),
-                    child: ClipOval(child: Image.network(s.image, fit: BoxFit.cover,
-                      loadingBuilder: (_, child, progress) => progress == null ? child : const ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, size: 80, color: Colors.white70)),
-                      errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, size: 80, color: Colors.white70)))),
+                    child: ClipOval(child: AppCachedImage(imageUrl: s.image, memCacheWidth: 600,
+                      placeholder: const ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, size: 80, color: Colors.white70)),
+                      errorWidget: const ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, size: 80, color: Colors.white70)))),
                   )),
                   SizedBox(height: compact ? 18 : 28),
                   Text(s.title, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
@@ -571,7 +571,7 @@ class _SaavnCollectionPageState extends State<SaavnCollectionPage> {
   Widget _hero(String image, String title, String subtitle, VoidCallback? play) {
     final cs = Theme.of(context).colorScheme;
     Widget placeholder() => const ColoredBox(color: Color(0xFFF1F2F4), child: Center(child: Icon(Icons.music_note, size: 42)));
-    Widget cover() => image.isEmpty ? placeholder() : Image.network(image, fit: BoxFit.cover, loadingBuilder: (_, child, progress) => progress == null ? child : placeholder(), errorBuilder: (_, __, ___) => placeholder());
+    Widget cover() => image.isEmpty ? placeholder() : AppCachedImage(imageUrl: image, memCacheWidth: 900, placeholder: placeholder(), errorWidget: placeholder());
     return SliverToBoxAdapter(child: Column(children: [
       SizedBox(height: 380, child: Stack(fit: StackFit.expand, children: [cover(), DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black38, cs.surface], stops: const [.25, 1])))])),
       Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 14), child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -627,7 +627,7 @@ class _SaavnArtistPageState extends State<SaavnArtistPage> {
         DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black38, cs.surface], stops: const [.25, 1])))
       ]))),
       SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 14), child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        SizedBox(width: 110, child: ClipRRect(borderRadius: BorderRadius.circular(10), child: AspectRatio(aspectRatio: 2/3, child: image.isEmpty ? placeholder() : Image.network(image, fit: BoxFit.cover, loadingBuilder: (_, child, progress) => progress == null ? child : placeholder(), errorBuilder: (_, __, ___) => placeholder())))), const SizedBox(width: 16),
+        SizedBox(width: 110, child: ClipRRect(borderRadius: BorderRadius.circular(10), child: AspectRatio(aspectRatio: 2/3, child: image.isEmpty ? placeholder() : AppCachedImage(imageUrl: image, memCacheWidth: 360, placeholder: placeholder(), errorWidget: placeholder())))), const SizedBox(width: 16),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(name, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)), const SizedBox(height: 6), Text((widget.item['follower_count'] ?? widget.item['fan_count'] ?? '').toString() + ' Fans'), const SizedBox(height: 12),
           FilledButton(onPressed: songs.isEmpty ? null : () => _playSaavnAndOpen(context, songs), style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: const Text('Play all'))
         ]))

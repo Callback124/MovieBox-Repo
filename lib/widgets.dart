@@ -1,9 +1,48 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter/material.dart';
 
 import 'detail_page.dart';
 import 'models.dart';
 import 'view_more_page.dart';
+
+/// Shared persistent image cache for posters, music artwork and detail images.
+class AppImageCache {
+  AppImageCache._();
+  static final CacheManager instance = CacheManager(Config(
+    'moviefoxImageCache',
+    stalePeriod: const Duration(days: 14),
+    maxNrOfCacheObjects: 1200,
+  ));
+}
+
+/// Disk-cached network image with consistent in-place placeholders.
+class AppCachedImage extends StatelessWidget {
+  const AppCachedImage({super.key, required this.imageUrl, this.width, this.height,
+    this.fit = BoxFit.cover, this.memCacheWidth = 360, this.placeholder, this.errorWidget});
+  final String imageUrl;
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+  final int? memCacheWidth;
+  final Widget? placeholder;
+  final Widget? errorWidget;
+
+  @override
+  Widget build(BuildContext context) => CachedNetworkImage(
+    imageUrl: imageUrl,
+    cacheManager: AppImageCache.instance,
+    width: width,
+    height: height,
+    fit: fit,
+    memCacheWidth: memCacheWidth,
+    maxWidthDiskCache: 900,
+    fadeInDuration: Duration.zero,
+    fadeOutDuration: Duration.zero,
+    placeholder: (_, __) => placeholder ?? const SizedBox.shrink(),
+    errorWidget: (_, __, ___) => errorWidget ?? const SizedBox.shrink(),
+  );
+}
 
 void toast(BuildContext context, String message) {
   ScaffoldMessenger.of(context)
@@ -48,6 +87,7 @@ class Poster extends StatelessWidget {
             ),
             if (isHttp(url))
               CachedNetworkImage(
+                cacheManager: AppImageCache.instance,
                 imageUrl: _optimizedPosterUrl(url),
                 fit: BoxFit.cover,
                 memCacheWidth: 180,
@@ -182,7 +222,7 @@ class ShelfRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               itemCount: shelf.items.length,
               itemExtent: w + 12,
-              cacheExtent: w * 7,
+              cacheExtent: w * 2.5,
               itemBuilder: (context, i) {
                 final it = shelf.items[i];
                 return Padding(

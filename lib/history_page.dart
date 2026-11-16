@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'models.dart';
 import 'player_page.dart';
 import 'store.dart';
+import 'widgets.dart';
 
 class HistoryPage extends StatelessWidget {
   const HistoryPage({super.key});
@@ -84,7 +85,7 @@ class HistoryPage extends StatelessWidget {
                     borderRadius: BorderRadius.circular(7),
                     child: SizedBox(width: 58, height: 78,
                       child: p.item.poster != null && p.item.poster!.startsWith('http')
-                        ? Image.network(p.item.poster!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF0F1F4), child: Icon(Icons.movie_outlined)))
+                        ? AppCachedImage(imageUrl: p.item.poster!, memCacheWidth: 180, errorWidget: const ColoredBox(color: Color(0xFFF0F1F4), child: Icon(Icons.movie_outlined)))
                         : const ColoredBox(color: Color(0xFFF0F1F4), child: Icon(Icons.movie_outlined)),
                     ),
                   ),
