@@ -285,8 +285,27 @@ class SaavnCollectionPage extends StatefulWidget {
 }
 class _SaavnCollectionPageState extends State<SaavnCollectionPage> {
   late Future<List<SaavnSong>> future;
+  final ScrollController _scroll = ScrollController();
+  final List<SaavnSong> _extraRows = [];
+  int _page = 1;
+  bool _loadingMore = false, _hasMore = false;
   String img(Map m) => (m['image'] ?? m['album_image'] ?? '').toString().replaceAll('150x150','500x500').replaceAll('50x50','500x500').replaceAll('http://','https://');
-  @override void initState() { super.initState(); final id = (widget.item[widget.playlist ? 'listid' : 'albumid'] ?? widget.item['id'] ?? '').toString(); future = JioSaavnPlayer.instance.api.albumSongs(id, playlist: widget.playlist); }
+  @override void initState() { super.initState(); final id = (widget.item[widget.playlist ? 'listid' : 'albumid'] ?? widget.item['id'] ?? '').toString(); future = JioSaavnPlayer.instance.api.albumSongs(id, playlist: widget.playlist, page: 1); _scroll.addListener(_onScroll); }
+  @override void dispose() { _scroll.removeListener(_onScroll); _scroll.dispose(); super.dispose(); }
+  void _onScroll() { if (_scroll.hasClients && !_loadingMore && _hasMore && _scroll.position.extentAfter < 500) _loadMore(); }
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final id = (widget.item[widget.playlist ? 'listid' : 'albumid'] ?? widget.item['id'] ?? '').toString();
+      final next = _page + 1;
+      final rows = await JioSaavnPlayer.instance.api.albumSongs(id, playlist: widget.playlist, page: next);
+      if (!mounted) return;
+      final existing = <String>{};
+      _extraRows.addAll(rows.where((x) => existing.add(x.id) && x.id.isNotEmpty));
+      setState(() { _page = next; _hasMore = rows.length >= 40 && _extraRows.isNotEmpty; _loadingMore = false; });
+    } catch (_) { if (mounted) setState(() => _loadingMore = false); }
+  }
   Widget _hero(String image, String title, String subtitle, VoidCallback? play) {
     final cs = Theme.of(context).colorScheme;
     Widget placeholder() => const ColoredBox(color: Color(0xFFF1F2F4), child: Center(child: Icon(Icons.music_note, size: 42)));
@@ -305,15 +324,17 @@ class _SaavnCollectionPageState extends State<SaavnCollectionPage> {
     final title = saavnClean(widget.item['title'] ?? widget.item['name'] ?? (widget.playlist ? 'Playlist' : 'Album'));
     final image = img(widget.item);
     return Scaffold(body: FutureBuilder<List<SaavnSong>>(future: future, builder: (context, snap) {
-      final rows = snap.data ?? <SaavnSong>[];
-      return CustomScrollView(slivers: [
+      final rows = [...(snap.data ?? <SaavnSong>[]), ..._extraRows];
+      if (snap.connectionState == ConnectionState.done && !snap.hasError && _page == 1) _hasMore = (snap.data?.length ?? 0) >= 40;
+      return CustomScrollView(controller: _scroll, slivers: [
         _hero(image, title, rows.length.toString() + ' songs', rows.isEmpty ? null : () => _playSaavnAndOpen(context, rows)),
         if (snap.connectionState == ConnectionState.waiting) const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))),
         if (snap.hasError) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(24), child: Text('Tracklist failed: ' + snap.error.toString()))),
         if (snap.connectionState == ConnectionState.done && !snap.hasError) SliverPadding(padding: const EdgeInsets.fromLTRB(14, 0, 14, 22), sliver: SliverGrid.builder(
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 150, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .48), itemCount: rows.length,
           itemBuilder: (context, i) { final song = rows[i]; return PosterCard(item: Item(pid: 'jiosaavn', id: song.id, type: 'music', title: song.title, poster: song.image), subtitle: song.artist, onTap: () => _playSaavnAndOpen(context, rows, start: i)); }
-        ))
+        )),
+        if (_loadingMore) const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator())))
       ]);
     }));
   }
