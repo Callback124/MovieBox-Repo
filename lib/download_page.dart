@@ -462,7 +462,7 @@ class _DownloadPageState extends State<DownloadPage> {
               selected: _rangeStart == start, onSelected: _loading ? null : (_) => _changeRange(start),
             ),
           )]),
-undefined        if (_loading)
+        if (_loading)
           Expanded(child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
             const CircularProgressIndicator(),
             const SizedBox(height: 12),

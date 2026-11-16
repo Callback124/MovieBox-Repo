@@ -176,9 +176,9 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
         body: IndexedStack(index: _page, children: _pages),
         bottomNavigationBar: ValueListenableBuilder<bool>(
           valueListenable: JioSaavnPlayer.instance.miniPlayerVisible,
-          builder: (context, visible, _) => visible && _page != 5
+          builder: (context, visible, _) => visible
               ? const MusicMiniPlayer()
-              : (_page == 5 && visible ? const MusicMiniPlayer() : null),
+              : const SizedBox.shrink(),
         ),
       ),
     ),
