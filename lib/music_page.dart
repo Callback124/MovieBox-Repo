@@ -245,13 +245,13 @@ class _MusicMiniPlayerState extends State<MusicMiniPlayer> with SingleTickerProv
     builder: (context, _, __) {
       final song = p.current;
       if (song == null) return const SizedBox.shrink();
-      return Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const SaavnFullPlayer()),
-          ),
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute<void>(builder: (_) => const SaavnFullPlayer()),
+        ),
+        child: Material(
+          color: Colors.transparent,
           child: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(begin: Alignment.centerLeft, end: Alignment.centerRight,
@@ -270,16 +270,14 @@ class _MusicMiniPlayerState extends State<MusicMiniPlayer> with SingleTickerProv
               ),
             ),
             const SizedBox(width: 12),
-            Expanded(child: InkWell(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SaavnFullPlayer())),
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
                 const SizedBox(height: 3),
                 Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: Color(0xFFE2F1FF), fontSize: 12)),
               ]),
-            )),
+            ),
             StreamBuilder<PlayerState>(
               stream: p.audio.playerStateStream,
               builder: (context, snap) => IconButton(

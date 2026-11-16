@@ -134,8 +134,9 @@ class _PlayerPageState extends State<PlayerPage> {
       if (!mounted || gen != _gen) return;
       _srcs = l;
       _failedSourceUrls.clear();
+      final allowAbove1080 = _item.pid == 'moviebox';
       final ok = l.where((s) =>
-          s.playable && (_sourceResolution(s) == 0 || _sourceResolution(s) <= 1080)).toList()
+          s.playable && (allowAbove1080 || _sourceResolution(s) == 0 || _sourceResolution(s) <= 1080)).toList()
         ..sort((a, b) => _sourceResolution(b).compareTo(_sourceResolution(a)));
       if (l.isEmpty) {
         _transitioning = false;
@@ -185,18 +186,19 @@ class _PlayerPageState extends State<PlayerPage> {
           value.duration.inSeconds.toDouble());
     }
     if (value.hasError) {
-      if (_item.pid == 'storytv') {
+      if (_item.pid == 'storytv' || _item.pid == 'moviebox') {
         if (_cur?.url != null) _failedSourceUrls.add(_cur!.url!);
         Source? fallback;
-        for (final source in _srcs) {
-          if (source.playable &&
-              !_failedSourceUrls.contains(source.url) &&
-              (_sourceResolution(source) == 0 || _sourceResolution(source) <= 1080)) {
-            fallback = source;
-            break;
-          }
-        }
+        final candidates = _srcs.where((source) =>
+          source.playable &&
+          !_failedSourceUrls.contains(source.url) &&
+          (_item.pid == 'moviebox' || _sourceResolution(source) == 0 || _sourceResolution(source) <= 1080)
+        ).toList()..sort((a, b) => _sourceResolution(b).compareTo(_sourceResolution(a)));
+        if (candidates.isNotEmpty) fallback = candidates.first;
         if (fallback != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('This quality could not play. Trying the next available quality…')),
+          );
           unawaited(_load(fallback));
           return;
         }
@@ -446,10 +448,10 @@ class _PlayerPageState extends State<PlayerPage> {
         for (final s in _srcs)
           ListTile(
             title: Text(s.name),
-            subtitle: _sourceResolution(s) > 1080
+            subtitle: (_item.pid != 'moviebox' && _sourceResolution(s) > 1080)
                 ? const Text('Above 1080p · Not supported on this device')
                 : (s.note != null ? Text(s.note!) : null),
-            enabled: (s.playable && (_sourceResolution(s) == 0 || _sourceResolution(s) <= 1080)) || s.link != null,
+            enabled: (s.playable && (_item.pid == 'moviebox' || _sourceResolution(s) == 0 || _sourceResolution(s) <= 1080)) || s.link != null,
             trailing: _cur == s
                 ? const Icon(Icons.check)
                 : (s.link != null ? const Icon(Icons.open_in_new, size: 18) : null),

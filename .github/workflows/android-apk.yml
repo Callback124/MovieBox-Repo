@@ -254,6 +254,49 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
+      - name: Enable high-resolution ExoPlayer playback and decoder fallback
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          roots = [Path.home() / '.pub-cache' / 'hosted' / 'pub.dev']
+          candidates = []
+          for root in roots:
+              if root.exists():
+                  candidates.extend(root.glob('video_player_android-*/android/src/main/java/**/VideoPlayer.java'))
+          if not candidates:
+              raise SystemExit('video_player_android VideoPlayer.java not found in pub-cache')
+          patched = 0
+          for path in candidates:
+              source = path.read_text()
+              if 'androidx.media3.exoplayer.ExoPlayer' not in source:
+                  continue
+              if 'new ExoPlayer.Builder(context)' not in source:
+                  continue
+              imports = 'import androidx.media3.exoplayer.DefaultRenderersFactory;\\nimport androidx.media3.exoplayer.trackselection.DefaultTrackSelector;'
+              if 'DefaultRenderersFactory' not in source:
+                  source = source.replace('import androidx.media3.exoplayer.ExoPlayer;', 'import androidx.media3.exoplayer.ExoPlayer;\\n' + imports)
+              old = 'return new ExoPlayer.Builder(context)'
+              new = '''DefaultRenderersFactory renderersFactory =
+                          new DefaultRenderersFactory(context)
+                              .setEnableDecoderFallback(true)
+                              .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER);
+                  DefaultTrackSelector trackSelector = new DefaultTrackSelector(context);
+                  trackSelector.setParameters(trackSelector.buildUponParameters()
+                      .clearVideoSizeConstraints()
+                      .setMaxVideoSize(Integer.MAX_VALUE, Integer.MAX_VALUE)
+                      .setExceedVideoConstraintsIfNecessary(true)
+                      .setExceedRendererCapabilitiesIfNecessary(true));
+                  return new ExoPlayer.Builder(context, renderersFactory).setTrackSelector(trackSelector)'''
+              if old in source:
+                  source = source.replace(old, new, 1)
+                  path.write_text(source)
+                  patched += 1
+          if patched == 0:
+              raise SystemExit('Could not safely patch video_player_android ExoPlayer builder')
+          print(f'Enabled decoder fallback and removed video-size caps in {patched} ExoPlayer builder(s)')
+          PY
+
       - name: Disable broken transitive Android lint task
         run: |
           cat >> android/build.gradle.kts <<'EOF'
