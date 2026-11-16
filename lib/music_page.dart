@@ -236,16 +236,70 @@ class SaavnSectionGridPage extends StatelessWidget {
   );
 }
 
-class MusicMiniPlayer extends StatelessWidget {
+class MusicMiniPlayer extends StatefulWidget {
   const MusicMiniPlayer({super.key});
   @override
-  Widget build(BuildContext context){final p=JioSaavnPlayer.instance;return ValueListenableBuilder<int>(valueListenable:p.revision,builder:(context,_,__) {final s=p.current;if(s==null)return const SizedBox.shrink();return Material(color:Theme.of(context).colorScheme.surfaceContainer,child:InkWell(onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const SaavnFullPlayer())),child:SizedBox(height:64,child:Row(children:[
-    const SizedBox(width:10),ClipRRect(borderRadius:BorderRadius.circular(7),child:Image.network(s.image,width:46,height:46,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.music_note))),
-    const SizedBox(width:10),Expanded(child:Column(mainAxisAlignment:MainAxisAlignment.center,crossAxisAlignment:CrossAxisAlignment.start,children:[Text(s.title,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.bold)),Text(s.artist,maxLines:1,overflow:TextOverflow.ellipsis)])),
-    StreamBuilder<PlayerState>(stream:p.audio.playerStateStream,builder:(context,snap)=>IconButton(onPressed:()=>snap.data?.playing==true?p.audio.pause():p.audio.play(),icon:Icon(snap.data?.playing==true?Icons.pause:Icons.play_arrow))),
-    IconButton(onPressed:p.next,icon:const Icon(Icons.skip_next)),
-    IconButton(tooltip:'Close mini player',onPressed:p.stopAndClear,icon:const Icon(Icons.close)),const SizedBox(width:4),
-  ]))));});}
+  State<MusicMiniPlayer> createState() => _MusicMiniPlayerState();
+}
+
+class _MusicMiniPlayerState extends State<MusicMiniPlayer> with SingleTickerProviderStateMixin {
+  final p = JioSaavnPlayer.instance;
+  late final AnimationController _spin = AnimationController(vsync: this, duration: const Duration(seconds: 9))..repeat();
+
+  @override
+  void dispose() { _spin.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<int>(
+    valueListenable: p.revision,
+    builder: (context, _, __) {
+      final song = p.current;
+      if (song == null) return const SizedBox.shrink();
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.centerLeft, end: Alignment.centerRight,
+            colors: [Color(0xFF087B91), Color(0xFF536B91), Color(0xFF06143D)]),
+          border: Border(top: BorderSide(color: Color(0x668FEAFF), width: 1)),
+        ),
+        child: SafeArea(top: false, child: SizedBox(
+          height: 82,
+          child: Row(children: [
+            const SizedBox(width: 12),
+            RotationTransition(
+              turns: _spin,
+              child: ClipOval(
+                child: Image.network(song.image, width: 54, height: 54, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox(width: 54, height: 54, child: ColoredBox(color: Color(0x66869FB6), child: Icon(Icons.music_note, color: Colors.white, size: 28)))),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: InkWell(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SaavnFullPlayer())),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
+                const SizedBox(height: 3),
+                Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFFE2F1FF), fontSize: 12)),
+              ]),
+            )),
+            StreamBuilder<PlayerState>(
+              stream: p.audio.playerStateStream,
+              builder: (context, snap) => IconButton(
+                tooltip: snap.data?.playing == true ? 'Pause' : 'Play',
+                onPressed: () => snap.data?.playing == true ? p.audio.pause() : p.audio.play(),
+                icon: Icon(snap.data?.playing == true ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 29),
+              ),
+            ),
+            IconButton(tooltip: 'Next', onPressed: p.next, icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 27)),
+            IconButton(tooltip: 'Close mini player', onPressed: p.stopAndClear,
+              icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24)),
+            const SizedBox(width: 4),
+          ]),
+        )),
+      );
+    },
+  );
 }
 
 class SaavnWaveformSeekbar extends StatelessWidget {
@@ -295,10 +349,10 @@ class _SaavnWaveformPainter extends CustomPainter {
     final remaining = Paint()..color = Colors.white.withOpacity(.58)..strokeWidth = stroke..strokeCap = StrokeCap.round;
     for (var i = 0; i < count; i++) {
       final x = gap * (i + .5);
-      final wave = (math.sin(i * 1.71).abs() * .42) +
-          (math.sin(i * .47 + 1.2).abs() * .34) +
-          (math.sin(i * .19 + 2.4).abs() * .24);
-      final envelope = .22 + .78 * wave.clamp(0.0, 1.0);
+      const cycleBars = 14;
+      final phase = (i % cycleBars) / (cycleBars - 1);
+      final triangle = phase <= .5 ? phase * 2 : (1 - phase) * 2;
+      final envelope = .16 + .84 * triangle;
       final h = 5.0 + (size.height * .88 * envelope);
       canvas.drawLine(Offset(x, center - h / 2), Offset(x, center + h / 2), x / size.width <= progress ? played : remaining);
     }

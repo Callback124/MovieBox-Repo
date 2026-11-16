@@ -166,6 +166,7 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
           ],
         ) : null,
         body: IndexedStack(index: _page, children: _pages),
+        bottomNavigationBar: _page == 5 ? const MusicMiniPlayer() : null,
       ),
     ),
   );
