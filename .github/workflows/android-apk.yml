@@ -89,7 +89,7 @@ jobs:
           import re
           path = Path('android/app/src/main/AndroidManifest.xml')
           content = path.read_text()
-          pattern = r'<application\\b([^>]*)>'
+          pattern = r'<application\b([^>]*)>'
           match = re.search(pattern, content, re.S)
           if not match:
               raise SystemExit('Android application tag missing')

@@ -7,7 +7,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
 class SaavnSong {
-  const SaavnSong({required this.id, required this.title, required this.artist, required this.album, required this.image, required this.duration, required this.encryptedUrl, this.lyricsId = '', this.albumId = ''});
+  const SaavnSong({required this.id, required this.title, required this.artist, required this.album, required this.image, required this.duration, required this.encryptedUrl, this.lyricsId = '', this.albumId = '', this.has320kbps});
   final String id, title, artist, album, image, encryptedUrl, lyricsId, albumId;
   final int duration;
   final bool? has320kbps;
