@@ -31,6 +31,18 @@ jobs:
       - name: Generate Android platform files
         run: flutter create --platforms=android --org com.moviefox --project-name moviefox .
 
+      - name: Configure audio service Activity
+        run: |
+          mkdir -p android/app/src/main/kotlin/com/moviefox/moviefox
+          cat > android/app/src/main/kotlin/com/moviefox/moviefox/MainActivity.kt <<'EOF'
+          package com.moviefox.moviefox
+
+          import com.ryanheise.audioservice.AudioServiceActivity
+
+          class MainActivity : AudioServiceActivity()
+          EOF
+          echo "Configured MainActivity for audio_service FlutterEngine"
+
       - name: Set Android launcher name to MovieFox
         run: |
           python3 - <<'PY'

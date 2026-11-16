@@ -50,10 +50,10 @@ class JioSaavnApi {
     }
     throw Exception('JioSaavn service unavailable: ' + last.toString());
   }
-  Future<List<SaavnSong>> searchSongs(String q, {int page = 1}) async => _songList(await call('search.getResults', {'q': q, 'p': '$page', 'n': '50'}));
-  Future<List<Map<String, dynamic>>> searchMedia(String kind, String q) async {
+  Future<List<SaavnSong>> searchSongs(String q, {int page = 1}) async => _songList(await call('search.getResults', {'q': q, 'p': '$page', 'n': '40'}));
+  Future<List<Map<String, dynamic>>> searchMedia(String kind, String q, {int page = 1}) async {
     final method = switch (kind) {'albums' => 'search.getAlbumResults', 'playlists' => 'search.getPlaylistResults', _ => 'search.getArtistResults'};
-    final data = await call(method, {'q': q, 'p': '1', 'n': '40'});
+    final data = await call(method, {'q': q, 'p': '$page', 'n': '40'});
     final rows = data is Map ? (data['results'] ?? data['data']) : data;
     return rows is List ? rows.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList() : [];
   }
@@ -100,7 +100,7 @@ class JioSaavnApi {
     }
     return sections;
   }
-  Future<List<SaavnSong>> albumSongs(String id, {bool playlist = false}) async => _songList(await call(playlist ? 'playlist.getDetails' : 'content.getAlbumDetails', {(playlist ? 'listid' : 'albumid'): id, 'cc': 'in'}));
+  Future<List<SaavnSong>> albumSongs(String id, {bool playlist = false, int page = 1}) async => _songList(await call(playlist ? 'playlist.getDetails' : 'content.getAlbumDetails', {(playlist ? 'listid' : 'albumid'): id, 'cc': 'in', 'p': '$page', 'n': '40'}));
   Future<Map<String, dynamic>> songDetails(String id) async {
     final data = await call('song.getDetails', {'pids': id, 'cc': 'in'});
     if (data is Map) { final value = data[id]; if (value is Map) return Map<String, dynamic>.from(value); if (data['songs'] is List && (data['songs'] as List).isNotEmpty) return Map<String, dynamic>.from(data['songs'][0] as Map); }

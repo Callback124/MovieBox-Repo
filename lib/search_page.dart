@@ -41,6 +41,9 @@ class SearchPageState extends State<SearchPage> {
   int _saavnTab = 0;
   List<SaavnSong> _saavnSongs = [];
   List<Map<String, dynamic>> _saavnMedia = [];
+  int _saavnPage = 1;
+  bool _saavnHasMore = false;
+  bool _saavnLoadingMore = false;
 
   @override
   void initState() {
@@ -129,19 +132,19 @@ class SearchPageState extends State<SearchPage> {
     final q = raw.trim();
     if (_saavnMode) {
       final my = ++_token;
-      if (q.isEmpty) { setState(() { _query = ''; _saavnSongs = []; _saavnMedia = []; _loading = false; }); return; }
+      if (q.isEmpty) { setState(() { _query = ''; _saavnSongs = []; _saavnMedia = []; _saavnPage = 1; _saavnHasMore = false; _saavnLoadingMore = false; _loading = false; }); return; }
       if (_scroll.hasClients) _scroll.jumpTo(0);
-      setState(() { _query = q; _loading = true; _saavnSongs = []; _saavnMedia = []; });
+      setState(() { _query = q; _loading = true; _loadingMore = false; _saavnPage = 1; _saavnHasMore = false; _saavnLoadingMore = false; _saavnSongs = []; _saavnMedia = []; });
       try {
         if (_saavnTab == 0) {
-          final result = await JioSaavnPlayer.instance.api.searchSongs(q);
+          final result = await JioSaavnPlayer.instance.api.searchSongs(q, page: 1);
           if (!mounted || my != _token) return;
-          setState(() { _saavnSongs = result; _loading = false; });
+          setState(() { _saavnSongs = result; _saavnHasMore = result.length >= 40; _loading = false; });
         } else {
           final kind = ['songs', 'albums', 'playlists', 'artists'][_saavnTab];
-          final result = await JioSaavnPlayer.instance.api.searchMedia(kind, q);
+          final result = await JioSaavnPlayer.instance.api.searchMedia(kind, q, page: 1);
           if (!mounted || my != _token) return;
-          setState(() { _saavnMedia = result; _loading = false; });
+          setState(() { _saavnMedia = result; _saavnHasMore = result.length >= 40; _loading = false; });
         }
       } catch (e) {
         if (mounted && my == _token) { setState(() => _loading = false); toast(context, 'JioSaavn search failed: $e'); }
@@ -208,8 +211,35 @@ class SearchPageState extends State<SearchPage> {
   }
 
   void _onScroll() {
-    if (!_scroll.hasClients || _loading || _loadingMore || !_hasMore || _query.isEmpty) return;
+    if (!_scroll.hasClients || _loading || _loadingMore || _query.isEmpty) return;
+    if (_saavnMode) { if (_saavnHasMore && _scroll.position.extentAfter < 500) _loadMoreSaavn(); return; }
+    if (!_hasMore) return;
     if (_scroll.position.extentAfter < 500) _loadMore();
+  }
+
+  Future<void> _loadMoreSaavn() async {
+    if (_saavnLoadingMore || !_saavnHasMore || _query.isEmpty) return;
+    setState(() => _saavnLoadingMore = true);
+    try {
+      final next = _saavnPage + 1;
+      if (_saavnTab == 0) {
+        final rows = await JioSaavnPlayer.instance.api.searchSongs(_query, page: next);
+        if (!mounted) return;
+        final seen = _saavnSongs.map((x) => x.id).toSet();
+        final fresh = rows.where((x) => seen.add(x.id)).toList();
+        setState(() { _saavnSongs = [..._saavnSongs, ...fresh]; _saavnPage = next; _saavnHasMore = rows.length >= 40 && fresh.isNotEmpty; _saavnLoadingMore = false; });
+      } else {
+        final kind = ['songs', 'albums', 'playlists', 'artists'][_saavnTab];
+        final rows = await JioSaavnPlayer.instance.api.searchMedia(kind, _query, page: next);
+        if (!mounted) return;
+        final seen = _saavnMedia.map((x) => (x['id'] ?? x['albumid'] ?? x['listid'] ?? x['artistid'] ?? '').toString()).toSet();
+        final fresh = rows.where((x) => seen.add((x['id'] ?? x['albumid'] ?? x['listid'] ?? x['artistid'] ?? '').toString())).toList();
+        setState(() { _saavnMedia = [..._saavnMedia, ...fresh]; _saavnPage = next; _saavnHasMore = rows.length >= 40 && fresh.isNotEmpty; _saavnLoadingMore = false; });
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onScroll());
+    } catch (e) {
+      if (mounted) { setState(() => _saavnLoadingMore = false); toast(context, 'JioSaavn: could not load more: $e'); }
+    }
   }
 
   Future<void> _loadMore() async {
@@ -269,7 +299,7 @@ class SearchPageState extends State<SearchPage> {
           try { await JioSaavnPlayer.instance.playList(songs, start: i); if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const SaavnFullPlayer())); }
           catch (e) { if (context.mounted) toast(context, 'Playback failed: $e'); }
         }, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox.expand(child: song.image.isEmpty ? const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42)) : Image.network(song.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42)))))),
+          Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox.expand(child: song.image.isEmpty ? const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42)) : Image.network(song.image, fit: BoxFit.cover, loadingBuilder: (_, child, p) => p == null ? child : const ColoredBox(color: Color(0xFFF1F2F4), child: Center(child: Icon(Icons.music_note, size: 30))), errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42)))))),
           const SizedBox(height: 7), Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
           Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         ]));
@@ -292,7 +322,7 @@ class SearchPageState extends State<SearchPage> {
           else if (_saavnTab == 1 || _saavnTab == 2) Navigator.push(context, MaterialPageRoute(builder: (_) => SaavnCollectionPage(item: item, playlist: _saavnTab == 2)));
           else { final song = SaavnSong.fromJson(item); JioSaavnPlayer.instance.playList([song]).then((_) { if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => const SaavnFullPlayer())); }).catchError((e) { if (context.mounted) toast(context, 'Playback failed: $e'); }); }
         }, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox.expand(child: image.isEmpty ? const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42)) : Image.network(image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42)))))),
+          Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox.expand(child: image.isEmpty ? const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42)) : Image.network(image, fit: BoxFit.cover, loadingBuilder: (_, child, p) => p == null ? child : const ColoredBox(color: Color(0xFFF1F2F4), child: Center(child: Icon(Icons.music_note, size: 30))), errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 42)))))),
           const SizedBox(height: 7), Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
           if (subtitle.isNotEmpty) Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         ]));
@@ -333,7 +363,7 @@ class SearchPageState extends State<SearchPage> {
         ),
         if (_saavnMode)
           SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 12), child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
-            for (var i = 0; i < 4; i++) Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text(['Songs', 'Albums', 'Playlists', 'Artists'][i]), selected: _saavnTab == i, showCheckmark: false, onSelected: (_) { setState(() { _saavnTab = i; _saavnSongs = []; _saavnMedia = []; }); if (_query.isNotEmpty) _search(_query); }))
+            for (var i = 0; i < 4; i++) Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text(['Songs', 'Albums', 'Playlists', 'Artists'][i]), selected: _saavnTab == i, showCheckmark: false, onSelected: (_) { setState(() { _saavnTab = i; _saavnSongs = []; _saavnMedia = []; _saavnPage = 1; _saavnHasMore = false; _saavnLoadingMore = false; }); if (_query.isNotEmpty) _search(_query); }))
           ])))),
         if (_suggestions.isNotEmpty && _query.isEmpty && !_saavnMode)
           SliverToBoxAdapter(
@@ -378,7 +408,7 @@ class SearchPageState extends State<SearchPage> {
             else
               PosterGrid(items: g.items),
           ],
-        if (_loadingMore)
+        if (_loadingMore || _saavnLoadingMore)
           const SliverToBoxAdapter(child: Padding(
             padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()))),
       ],

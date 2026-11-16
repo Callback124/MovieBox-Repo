@@ -307,10 +307,6 @@ class _SaavnCollectionPageState extends State<SaavnCollectionPage> {
     return Scaffold(body: FutureBuilder<List<SaavnSong>>(future: future, builder: (context, snap) {
       final rows = snap.data ?? <SaavnSong>[];
       return CustomScrollView(slivers: [
-        SliverAppBar(pinned: true, expandedHeight: 220, flexibleSpace: FlexibleSpaceBar(background: Stack(fit: StackFit.expand, children: [
-          if (image.isNotEmpty) Image.network(image, fit: BoxFit.cover, loadingBuilder: (_, child, progress) => progress == null ? child : const ColoredBox(color: Color(0xFFF1F2F4)), errorBuilder: (_, __, ___) => const SizedBox.shrink()),
-          DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black38, Theme.of(context).colorScheme.surface], stops: const [.25, 1])))
-        ]))),
         _hero(image, title, rows.length.toString() + ' songs', rows.isEmpty ? null : () => _playSaavnAndOpen(context, rows)),
         if (snap.connectionState == ConnectionState.waiting) const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))),
         if (snap.hasError) SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(24), child: Text('Tracklist failed: ' + snap.error.toString()))),
