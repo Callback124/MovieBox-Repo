@@ -76,7 +76,7 @@ class _MusicPageState extends State<MusicPage> {
   String img(Map m)=>(m['image']??m['album_image']??'').toString().replaceAll('150x150','500x500').replaceAll('50x50','500x500').replaceAll('http://','https://');
   String type(Map m){final t=(m['type']??m['media_type']??'').toString().toLowerCase();if(t.contains('artist')||m.containsKey('artistid'))return 'artist';if(t.contains('album')||m.containsKey('albumid'))return 'album';if(t.contains('song')||m.containsKey('encrypted_media_url'))return 'song';return 'playlist';}
   Future<void> _searchGenre(String genre) async { setState(() { searching = true; query.text = saavnClean(genre); tab = 0; songs = []; media = []; }); await search(query.text); }
-  void open(Map<String,dynamic> m){final t=type(m);if(t=='artist'){Navigator.push(context,MaterialPageRoute(builder:(_)=>SaavnArtistPage(item:m)));}else if(t=='song'){final s=SaavnSong.fromJson(m);play([s],0);}else{showModalBottomSheet<void>(context:context,isScrollControlled:true,showDragHandle:true,builder:(_)=>SaavnTracklistSheet(item:m,playlist:t=='playlist'));}}
+  void open(Map<String,dynamic> m){final t=type(m);if(t=='artist'){Navigator.push(context,MaterialPageRoute(builder:(_)=>SaavnArtistPage(item:m)));}else if(t=='song'){final s=SaavnSong.fromJson(m);play([s],0);}else{Navigator.push(context,MaterialPageRoute(builder:(_)=>SaavnCollectionPage(item:m,playlist:t=='playlist')));}}
   Future<void> play(List<SaavnSong> list,int i)async{try{await JioSaavnPlayer.instance.playList(list,start:i);if(mounted)Navigator.push(context,MaterialPageRoute(builder:(_)=>const SaavnFullPlayer()));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Playback failed: '+e.toString())));}}
   @override
   Widget build(BuildContext context)=>PopScope(canPop: !searching,onPopInvokedWithResult: (didPop, result){if(!didPop && searching){setState(()=>searching=false);}},child:CustomScrollView(slivers:[
@@ -149,7 +149,7 @@ class _MusicPageState extends State<MusicPage> {
     ListTile(leading:const Icon(Icons.play_arrow),title:const Text('Play next'),onTap:(){final p=JioSaavnPlayer.instance;p.queue.insert((p.index+1).clamp(0,p.queue.length).toInt(),s);Navigator.pop(ctx);}),
     ListTile(leading:const Icon(Icons.queue_music),title:const Text('Add to queue'),onTap:(){JioSaavnPlayer.instance.queue.add(s);Navigator.pop(ctx);}),
     ListTile(leading:const Icon(Icons.download_outlined),title:const Text('Download'),onTap:(){Navigator.pop(ctx);_downloadSaavn(context,s);}),
-    ListTile(leading:const Icon(Icons.album),title:const Text('View album'),onTap:(){Navigator.pop(ctx);showModalBottomSheet<void>(context:context,isScrollControlled:true,builder:(_)=>SaavnTracklistSheet(item:{'albumid':s.albumId,'title':s.album,'image':s.image},playlist:false));}),
+    ListTile(leading:const Icon(Icons.album),title:const Text('View album'),onTap:(){Navigator.pop(ctx);Navigator.push(context,MaterialPageRoute(builder:(_)=>SaavnCollectionPage(item:{'albumid':s.albumId,'title':s.album,'image':s.image},playlist:false)));}),
   ])))),onTap:()=>play(list,list.indexOf(s)));
 }
 
@@ -196,39 +196,49 @@ class _SaavnFullPlayerState extends State<SaavnFullPlayer>{
   void _queue(){showModalBottomSheet<void>(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>SizedBox(height:MediaQuery.sizeOf(ctx).height*.7,child:ListView(children:[const ListTile(title:Text('Up next')),for(var i=0;i<p.queue.length;i++)ListTile(title:Text(p.queue[i].title),subtitle:Text(p.queue[i].artist),selected:i==p.index,onTap:()async{p.index=i;p.revision.value++;await p.playCurrent();if(ctx.mounted)Navigator.pop(ctx);})])));}
 }
 
-class SaavnTracklistSheet extends StatefulWidget{
-  const SaavnTracklistSheet({super.key,required this.item,required this.playlist});
-  final Map<String,dynamic> item;final bool playlist;
-  @override State<SaavnTracklistSheet> createState()=>_SaavnTracklistSheetState();
+class SaavnCollectionPage extends StatefulWidget{
+  const SaavnCollectionPage({super.key,required this.item,required this.playlist});
+  final Map<String,dynamic> item; final bool playlist;
+  @override State<SaavnCollectionPage> createState()=>_SaavnCollectionPageState();
 }
-class _SaavnTracklistSheetState extends State<SaavnTracklistSheet>{
+class _SaavnCollectionPageState extends State<SaavnCollectionPage>{
   late Future<List<SaavnSong>> future;
+  String img(Map m)=>(m['image']??m['album_image']??'').toString().replaceAll('150x150','500x500').replaceAll('50x50','500x500').replaceAll('http://','https://');
   @override void initState(){super.initState();final id=(widget.item[widget.playlist?'listid':'albumid']??widget.item['id']??'').toString();future=JioSaavnPlayer.instance.api.albumSongs(id,playlist:widget.playlist);}
-  @override Widget build(BuildContext context)=>SafeArea(child:SizedBox(height:MediaQuery.sizeOf(context).height*.82,child:FutureBuilder<List<SaavnSong>>(future:future,builder:(context,snap){final rows=snap.data??[];return Column(children:[
-    Padding(padding:const EdgeInsets.all(16),child:Row(children:[ClipRRect(borderRadius:BorderRadius.circular(10),child:Image.network((widget.item['image']??'').toString().replaceAll('150x150','500x500'),width:82,height:82,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.album,size:60))),const SizedBox(width:14),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(saavnClean(widget.item['title']??widget.item['name']??'Music collection'),style:Theme.of(context).textTheme.titleLarge),Text(rows.length.toString()+' songs')]))])),
-    Row(children:[const SizedBox(width:16),FilledButton.icon(onPressed:rows.isEmpty?null:()=>_playSaavnAndOpen(context,rows),icon:const Icon(Icons.play_arrow),label:const Text('Play all')),const SizedBox(width:8),OutlinedButton.icon(onPressed:rows.isEmpty?null:(){final shuffled=[...rows]..shuffle();_playSaavnAndOpen(context,shuffled);},icon:const Icon(Icons.shuffle),label:const Text('Shuffle'))]),
-    if(snap.connectionState==ConnectionState.waiting)const Expanded(child:Center(child:CircularProgressIndicator()))else if(snap.hasError)Expanded(child:Center(child:Text('Tracklist failed: '+snap.error.toString())))else Expanded(child:GridView.builder(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 18),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .92),
-      itemCount: rows.length,
-      itemBuilder: (context, i) {
-        final song = rows[i];
-        return InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => _playSaavnAndOpen(context, rows, start: i),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(10), child: SizedBox.expand(
-              child: song.image.isEmpty ? const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 38))
-                : Image.network(song.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF1F2F4), child: Icon(Icons.music_note, size: 38))),
-            ))),
-            const SizedBox(height: 6),
-            Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-            Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-          ]),
-        );
-      },
-    )),
-  ]);})));
+  @override Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:Text(saavnClean(widget.item['title']??widget.item['name']??(widget.playlist?'Playlist':'Album')))),
+    body:FutureBuilder<List<SaavnSong>>(future:future,builder:(context,snap){
+      final rows=snap.data??[];
+      if(snap.connectionState==ConnectionState.waiting)return const Center(child:CircularProgressIndicator());
+      if(snap.hasError)return Center(child:Padding(padding:const EdgeInsets.all(24),child:Text('Tracklist failed: '+snap.error.toString())));
+      return CustomScrollView(slivers:[
+        SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.fromLTRB(18,14,18,18),child:Row(crossAxisAlignment:CrossAxisAlignment.center,children:[
+          ClipRRect(borderRadius:BorderRadius.circular(14),child:Image.network(img(widget.item),width:116,height:116,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const SizedBox(width:116,height:116,child:ColoredBox(color:Color(0xFFF1F2F4),child:Icon(Icons.album,size:48))))),
+          const SizedBox(width:16),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(saavnClean(widget.item['title']??widget.item['name']??(widget.playlist?'Playlist':'Album')),style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold)),
+            const SizedBox(height:6),Text(rows.length.toString()+' songs',style:Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height:12),Wrap(spacing:8,children:[
+              FilledButton.icon(onPressed:rows.isEmpty?null:()=>_playSaavnAndOpen(context,rows),icon:const Icon(Icons.play_arrow),label:const Text('Play all')),
+              OutlinedButton.icon(onPressed:rows.isEmpty?null:(){final shuffled=[...rows]..shuffle();_playSaavnAndOpen(context,shuffled);},icon:const Icon(Icons.shuffle),label:const Text('Shuffle')),
+            ]),
+          ])),
+        ]))),
+        SliverPadding(padding:const EdgeInsets.fromLTRB(14,0,14,22),sliver:SliverGrid.builder(
+          gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:2,crossAxisSpacing:12,mainAxisSpacing:12,childAspectRatio:.92),
+          itemCount:rows.length,
+          itemBuilder:(context,i){final song=rows[i];return InkWell(
+            borderRadius:BorderRadius.circular(12),
+            onTap:()=>_playSaavnAndOpen(context,rows,start:i),
+            child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Expanded(child:ClipRRect(borderRadius:BorderRadius.circular(10),child:SizedBox.expand(child:song.image.isEmpty?const ColoredBox(color:Color(0xFFF1F2F4),child:Icon(Icons.music_note,size:38)):Image.network(song.image,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const ColoredBox(color:Color(0xFFF1F2F4),child:Icon(Icons.music_note,size:38)))))),
+              const SizedBox(height:6),Text(song.title,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w700)),
+              Text(song.artist,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:12)),
+            ]),
+          );},
+        )),
+      ]);
+    }),
+  );
 }
 class SaavnArtistPage extends StatefulWidget{
   const SaavnArtistPage({super.key,required this.item});final Map<String,dynamic> item;
@@ -258,7 +268,7 @@ class _SaavnArtistPageState extends State<SaavnArtistPage>{
         shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .92),
         itemCount: albums.whereType<Map>().length,
-        itemBuilder: (context, i) { final item = Map<String,dynamic>.from(albums.whereType<Map>().elementAt(i)); final image = img(item); return InkWell(onTap: () => showModalBottomSheet<void>(context:context,isScrollControlled:true,showDragHandle:true,builder:(_)=>SaavnTracklistSheet(item:item,playlist:false)), child: Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        itemBuilder: (context, i) { final item = Map<String,dynamic>.from(albums.whereType<Map>().elementAt(i)); final image = img(item); return InkWell(onTap: () => Navigator.push(context,MaterialPageRoute(builder:(_)=>SaavnCollectionPage(item:item,playlist:false))), child: Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Expanded(child:ClipRRect(borderRadius:BorderRadius.circular(10),child:SizedBox.expand(child:image.isEmpty?const ColoredBox(color:Color(0xFFF1F2F4),child:Icon(Icons.album,size:38)):Image.network(image,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Icon(Icons.album))))),
           const SizedBox(height:6),Text(saavnClean(item['title']??item['name']??'Album'),maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w700)),const Text('Album',style:TextStyle(fontSize:12)),
         ])); },
