@@ -462,6 +462,22 @@ class _DownloadPageState extends State<DownloadPage> {
               selected: _rangeStart == start, onSelected: _loading ? null : (_) => _changeRange(start),
             ),
           )]),
+
+        // Keep video download quality selection available for every video provider.
+        // JioSaavn music downloads use their own flow in music_page.dart.
+        if (_qualities.isNotEmpty)
+          _tabs([for (final quality in _qualities) Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              showCheckmark: false,
+              label: Text(quality),
+              selected: _quality == quality,
+              onSelected: _loading ? null : (_) async {
+                setState(() => _quality = quality);
+                await _loadSizes();
+              },
+            ),
+          )]),
         if (_loading)
           Expanded(child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
             const CircularProgressIndicator(),
