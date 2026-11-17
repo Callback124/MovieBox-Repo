@@ -503,15 +503,13 @@ class _PlayerPageState extends State<PlayerPage> {
   void _kick() {
     _hideTimer?.cancel();
     if (!mounted) return;
-    // Keep the unlock control available for as long as the player is locked.
-    if (_locked) {
-      if (!_visible) setState(() => _visible = true);
-      return;
-    }
     if (!_visible) setState(() => _visible = true);
-    if (_player?.value.isPlaying ?? false) {
+
+    // The unlock icon follows the same auto-hide behavior as player controls.
+    // While locked, it also auto-hides when playback is paused.
+    if (_locked || (_player?.value.isPlaying ?? false)) {
       _hideTimer = Timer(const Duration(seconds: 4), () {
-        if (mounted && !_locked && (_player?.value.isPlaying ?? false)) {
+        if (mounted && (_locked || (_player?.value.isPlaying ?? false))) {
           setState(() => _visible = false);
         }
       });
@@ -524,7 +522,6 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _toggleUi() {
-    if (_locked) return;
     if (_visible) {
       _hideTimer?.cancel();
       setState(() => _visible = false);
@@ -830,9 +827,11 @@ class _PlayerPageState extends State<PlayerPage> {
   void _lockControls() {
     _hideTimer?.cancel();
     setState(() { _locked = true; _visible = true; });
+    _kick();
   }
 
   void _unlockControls() {
+    _hideTimer?.cancel();
     setState(() { _locked = false; _visible = true; });
     _kick();
   }
@@ -1022,12 +1021,12 @@ class _PlayerPageState extends State<PlayerPage> {
   Widget build(BuildContext context) {
     final next = _next;
     final msgOn = _msg != null || (_ended && next != null);
-    final showUi = _visible || msgOn || _locked;
+    final showUi = _visible || msgOn;
     return Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: _locked ? null : _toggleUi,
+        onTap: _toggleUi,
         onDoubleTapDown: _isLandscape && !_locked ? _onGestureDoubleTapDown : null,
         onDoubleTap: _isLandscape && !_locked ? _onGestureDoubleTap : null,
         onPanStart: _isLandscape && !_locked ? _onGesturePanStart : null,
