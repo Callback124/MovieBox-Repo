@@ -28,29 +28,53 @@ ThemeData _lightTheme() {
     useMaterial3: true, brightness: Brightness.light, colorScheme: scheme,
     scaffoldBackgroundColor: bg,
     appBarTheme: const AppBarTheme(backgroundColor: bg, foregroundColor: Colors.black, surfaceTintColor: Colors.transparent, scrolledUnderElevation: 0, elevation: 0),
+    cardTheme: const CardThemeData(color: Colors.white, surfaceTintColor: Colors.transparent),
+    dialogTheme: const DialogThemeData(backgroundColor: Colors.white, surfaceTintColor: Colors.transparent),
     inputDecorationTheme: const InputDecorationTheme(filled: true, fillColor: Color(0xFFF3F4F6), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(4)), borderSide: BorderSide.none)),
+  );
+}
+
+ThemeData _darkTheme() {
+  const bg = Color(0xFF0D111B);
+  const surface = Color(0xFF171D2A);
+  final scheme = ColorScheme.fromSeed(seedColor: const Color(0xFF38BDF8), brightness: Brightness.dark)
+      .copyWith(surface: bg, surfaceContainer: surface, surfaceContainerHighest: const Color(0xFF222B3B));
+  return ThemeData(
+    useMaterial3: true, brightness: Brightness.dark, colorScheme: scheme,
+    scaffoldBackgroundColor: bg,
+    appBarTheme: const AppBarTheme(backgroundColor: bg, foregroundColor: Colors.white, surfaceTintColor: Colors.transparent, scrolledUnderElevation: 0, elevation: 0),
+    cardTheme: const CardThemeData(color: surface, surfaceTintColor: Colors.transparent),
+    dialogTheme: const DialogThemeData(backgroundColor: surface, surfaceTintColor: Colors.transparent),
+    bottomSheetTheme: const BottomSheetThemeData(backgroundColor: surface, surfaceTintColor: Colors.transparent),
+    inputDecorationTheme: const InputDecorationTheme(filled: true, fillColor: Color(0xFF222B3B), border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(4)), borderSide: BorderSide.none)),
+    dividerColor: const Color(0xFF30394A),
   );
 }
 
 class MovieFoxApp extends StatelessWidget {
   const MovieFoxApp({super.key});
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'MovieFox',
-    navigatorKey: movieFoxNavigatorKey,
-    debugShowCheckedModeBanner: false,
-    theme: _lightTheme(),
-    home: const MovieFoxShell(),
-    builder: (context, child) => Stack(
-      children: [
-        Positioned.fill(child: child ?? const SizedBox.shrink()),
-        ValueListenableBuilder<bool>(
-          valueListenable: JioSaavnPlayer.instance.miniPlayerVisible,
-          builder: (context, visible, _) => visible
-              ? const Positioned(left: 0, right: 0, bottom: 0, child: Material(elevation: 18, child: MusicMiniPlayer()))
-              : const SizedBox.shrink(),
-        ),
-      ],
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: app,
+    builder: (context, _) => MaterialApp(
+      title: 'MovieFox',
+      navigatorKey: movieFoxNavigatorKey,
+      debugShowCheckedModeBanner: false,
+      theme: _lightTheme(),
+      darkTheme: _darkTheme(),
+      themeMode: app.theme,
+      home: const MovieFoxShell(),
+      builder: (context, child) => Stack(
+        children: [
+          Positioned.fill(child: child ?? const SizedBox.shrink()),
+          ValueListenableBuilder<bool>(
+            valueListenable: JioSaavnPlayer.instance.miniPlayerVisible,
+            builder: (context, visible, _) => visible
+                ? const Positioned(left: 0, right: 0, bottom: 0, child: Material(elevation: 18, child: MusicMiniPlayer()))
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
     ),
   );
 }

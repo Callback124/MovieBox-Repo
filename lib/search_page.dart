@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
 import 'providers.dart';
@@ -37,10 +36,6 @@ class SearchPageState extends State<SearchPage> {
   String _query = '';
   List<_Group> _groups = const [];
   List<String> _suggestions = const [];
-  List<String> _recentSearches = const [];
-  String get _historyProviderKey => _saavnMode
-      ? 'jiosaavn'
-      : (app.scope().isNotEmpty ? app.scope().first.id : app.active);
 
   bool _saavnMode = false;
   int _saavnTab = 0;
@@ -54,57 +49,6 @@ class SearchPageState extends State<SearchPage> {
   void initState() {
     super.initState();
     _scroll = ScrollController();
-    _loadRecentSearches();
-  }
-
-  Future<void> _loadRecentSearches() async {
-    final key = _historyProviderKey;
-    final prefs = await SharedPreferences.getInstance();
-    final values = prefs.getStringList('search_history_$key') ?? const <String>[];
-    if (!mounted || key != _historyProviderKey) return;
-    setState(() => _recentSearches = values);
-  }
-
-  Future<void> _rememberSearch(String query) async {
-    final key = _historyProviderKey;
-    final normalized = query.trim();
-    if (normalized.isEmpty) return;
-    final prefs = await SharedPreferences.getInstance();
-    final current = prefs.getStringList('search_history_$key') ?? <String>[];
-    final updated = <String>[
-      normalized,
-      ...current.where((value) => value.toLowerCase() != normalized.toLowerCase()),
-    ].take(10).toList();
-    await prefs.setStringList('search_history_$key', updated);
-    if (mounted && key == _historyProviderKey) {
-      setState(() => _recentSearches = updated);
-    }
-  }
-
-  Future<void> _clearRecentSearches() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Clear recent searches?'),
-        content: const Text('All recent searches for this provider will be deleted.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Clear all')),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    final key = _historyProviderKey;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('search_history_$key');
-    if (mounted && key == _historyProviderKey) setState(() => _recentSearches = const []);
-  }
-
-  void _useRecentSearch(String value) {
-    _ctrl.text = value;
-    _ctrl.selection = TextSelection.collapsed(offset: value.length);
-    setState(() => _suggestions = const []);
-    _search(value);
   }
 
   void setSaavnMode(bool value) {
@@ -127,7 +71,6 @@ class SearchPageState extends State<SearchPage> {
     _hasMore = false;
     _page = 1;
     _searchCursor = null;
-    _loadRecentSearches();
     if (_scroll.hasClients) _scroll.jumpTo(0);
     if (mounted) setState(() {});
   }
@@ -190,7 +133,6 @@ class SearchPageState extends State<SearchPage> {
     if (_saavnMode) {
       final my = ++_token;
       if (q.isEmpty) { setState(() { _query = ''; _saavnSongs = []; _saavnMedia = []; _saavnPage = 1; _saavnHasMore = false; _saavnLoadingMore = false; _loading = false; }); return; }
-      _rememberSearch(q);
       if (_scroll.hasClients) _scroll.jumpTo(0);
       setState(() { _query = q; _loading = true; _loadingMore = false; _saavnPage = 1; _saavnHasMore = false; _saavnLoadingMore = false; _saavnSongs = []; _saavnMedia = []; });
       try {
@@ -219,7 +161,6 @@ class SearchPageState extends State<SearchPage> {
       });
       return;
     }
-    _rememberSearch(q);
     if (_scroll.hasClients) _scroll.jumpTo(0);
     setState(() {
       _query = q;
@@ -420,34 +361,6 @@ class SearchPageState extends State<SearchPage> {
             ),
           ),
         ),
-        if (_ctrl.text.trim().isEmpty && _recentSearches.isNotEmpty)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Expanded(child: Text('Recent Searches', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
-                      TextButton(onPressed: _clearRecentSearches, child: const Text('Clear All')),
-                    ],
-                  ),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final recent in _recentSearches)
-                        ActionChip(
-                          label: Text(recent, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          onPressed: () => _useRecentSearch(recent),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
         if (_saavnMode)
           SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 12), child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
             for (var i = 0; i < 4; i++) Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text(['Songs', 'Albums', 'Playlists', 'Artists'][i]), selected: _saavnTab == i, showCheckmark: false, onSelected: (_) { setState(() { _saavnTab = i; _saavnSongs = []; _saavnMedia = []; _saavnPage = 1; _saavnHasMore = false; _saavnLoadingMore = false; }); if (_query.isNotEmpty) _search(_query); }))
