@@ -40,7 +40,7 @@ class SettingsPage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(22),
               ),
               child: Row(children: [
-                Container(width: 48, height: 48, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .18), borderRadius: BorderRadius.circular(15)), child: const Icon(Icons.movie_creation_outlined, color: Colors.white, size: 28)),
+                Container(width: 48, height: 48, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .18), borderRadius: BorderRadius.circular(15)), padding: const EdgeInsets.all(4), child: ClipRRect(borderRadius: BorderRadius.circular(11), child: Image.asset('assets/images/MovieFox_Launcher_1024.png', fit: BoxFit.contain))),
                 const SizedBox(width: 14),
                 const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('MovieFox', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
