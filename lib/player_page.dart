@@ -503,12 +503,24 @@ class _PlayerPageState extends State<PlayerPage> {
   void _kick() {
     _hideTimer?.cancel();
     if (!mounted) return;
+    // Keep the unlock control available for as long as the player is locked.
+    if (_locked) {
+      if (!_visible) setState(() => _visible = true);
+      return;
+    }
     if (!_visible) setState(() => _visible = true);
     if (_player?.value.isPlaying ?? false) {
       _hideTimer = Timer(const Duration(seconds: 4), () {
-        if (mounted && (_player?.value.isPlaying ?? false)) setState(() => _visible = false);
+        if (mounted && !_locked && (_player?.value.isPlaying ?? false)) {
+          setState(() => _visible = false);
+        }
       });
     }
+  }
+
+  void _hideControlsForGesture() {
+    _hideTimer?.cancel();
+    if (mounted && _visible) setState(() => _visible = false);
   }
 
   void _toggleUi() {
@@ -557,18 +569,44 @@ class _PlayerPageState extends State<PlayerPage> {
     if (!_isLandscape || _locked) return;
     final point = _gestureStart;
     if (point == null) return;
+    _hideControlsForGesture();
     final width = MediaQuery.sizeOf(context).width;
     if (point.dx < width / 3) {
-      _skip(-10);
+      _skipFromGesture(-10);
     } else if (point.dx > width * 2 / 3) {
-      _skip(10);
+      _skipFromGesture(10);
     } else {
       final controller = _player;
       if (controller == null) return;
-      controller.value.isPlaying ? controller.pause() : controller.play();
-      _kick();
+      final wasPlaying = controller.value.isPlaying;
+      if (wasPlaying) {
+        controller.pause();
+      } else {
+        controller.play();
+      }
+      _showGestureIndicator(
+        wasPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+        wasPlaying ? 'Paused' : 'Playing',
+        0,
+      );
     }
     _gestureStart = null;
+  }
+
+  void _skipFromGesture(int seconds) {
+    final controller = _player;
+    if (controller == null || !controller.value.isInitialized) return;
+    final target = controller.value.position + Duration(seconds: seconds);
+    final duration = controller.value.duration;
+    final position = target < Duration.zero
+        ? Duration.zero
+        : (target > duration ? duration : target);
+    controller.seekTo(position);
+    _showGestureIndicator(
+      seconds < 0 ? Icons.replay_10_rounded : Icons.forward_10_rounded,
+      '${seconds > 0 ? '+' : ''}${seconds}s',
+      0,
+    );
   }
 
   void _onGesturePanStart(DragStartDetails details) {
@@ -588,6 +626,7 @@ class _PlayerPageState extends State<PlayerPage> {
     final dy = details.localPosition.dy - start.dy;
     if (_gestureMode == 'pending') {
       if (dx.abs() < 10 && dy.abs() < 10) return;
+      _hideControlsForGesture();
       if (dx.abs() > dy.abs()) {
         _gestureMode = 'seek';
         _gestureStartPosition = _player?.value.position ?? Duration.zero;
@@ -631,21 +670,28 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _onGesturePanEnd(DragEndDetails details) {
     if (!_isLandscape || _locked) return;
-    if (_gestureMode == 'seek' && _seekPreview != null) {
-      _player?.seekTo(_seekPreview!);
-      _kick();
-    }
+    final completedMode = _gestureMode;
+    final seekPreview = _seekPreview;
+    final seekDelta = _seekDeltaSeconds.round();
     setState(() {
       _gestureMode = null;
       _gestureStart = null;
       _seekPreview = null;
-      _indicatorIcon = null;
-      _indicatorLabel = null;
     });
+    if (completedMode == 'seek' && seekPreview != null) {
+      _player?.seekTo(seekPreview);
+      _showGestureIndicator(
+        seekDelta < 0 ? Icons.fast_rewind_rounded : Icons.fast_forward_rounded,
+        '${_previewTime(Duration(seconds: seekDelta))} · ${_fmt(seekPreview)}',
+        0,
+      );
+    }
+    // Brightness/volume feedback fades naturally; do not reveal full controls.
   }
 
   void _onGestureLongPressStart(LongPressStartDetails details) {
     if (!_isLandscape || _locked) return;
+    _hideControlsForGesture();
     _player?.setPlaybackSpeed(2.0);
     if (mounted) {
       setState(() {
@@ -976,19 +1022,19 @@ class _PlayerPageState extends State<PlayerPage> {
   Widget build(BuildContext context) {
     final next = _next;
     final msgOn = _msg != null || (_ended && next != null);
-    final showUi = _visible || msgOn;
+    final showUi = _visible || msgOn || _locked;
     return Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: _locked ? null : _toggleUi,
-        onDoubleTapDown: _isLandscape ? _onGestureDoubleTapDown : null,
-        onDoubleTap: _isLandscape ? _onGestureDoubleTap : null,
-        onPanStart: _isLandscape ? _onGesturePanStart : null,
-        onPanUpdate: _isLandscape ? _onGesturePanUpdate : null,
-        onPanEnd: _isLandscape ? _onGesturePanEnd : null,
-        onLongPressStart: _isLandscape ? _onGestureLongPressStart : null,
-        onLongPressEnd: _isLandscape ? _onGestureLongPressEnd : null,
+        onDoubleTapDown: _isLandscape && !_locked ? _onGestureDoubleTapDown : null,
+        onDoubleTap: _isLandscape && !_locked ? _onGestureDoubleTap : null,
+        onPanStart: _isLandscape && !_locked ? _onGesturePanStart : null,
+        onPanUpdate: _isLandscape && !_locked ? _onGesturePanUpdate : null,
+        onPanEnd: _isLandscape && !_locked ? _onGesturePanEnd : null,
+        onLongPressStart: _isLandscape && !_locked ? _onGestureLongPressStart : null,
+        onLongPressEnd: _isLandscape && !_locked ? _onGestureLongPressEnd : null,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -1111,8 +1157,13 @@ class _PlayerPageState extends State<PlayerPage> {
         child: SafeArea(child: Align(
           alignment: Alignment.topLeft,
           child: IconButton(
-            tooltip: 'Unlock controls', onPressed: _unlockControls,
-            color: Colors.white, iconSize: 24,
+            tooltip: 'Unlock controls',
+            onPressed: _unlockControls,
+            constraints: const BoxConstraints.tightFor(width: 56, height: 56),
+            padding: const EdgeInsets.all(12),
+            color: Colors.white,
+            iconSize: 28,
+            splashRadius: 30,
             icon: const Icon(Icons.lock_open_rounded),
           ),
         )),
