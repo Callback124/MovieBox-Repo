@@ -49,6 +49,7 @@ class _PlayerPageState extends State<PlayerPage> {
   Duration _gestureStartPosition = Duration.zero;
   double _gestureStartValue = 0.5;
   String? _gestureMode;
+  bool _suppressGestureAutoShow = false;
   Duration? _seekPreview;
   double _seekDeltaSeconds = 0;
   double _indicatorValue = 0;
@@ -222,7 +223,7 @@ class _PlayerPageState extends State<PlayerPage> {
       if (value.isPlaying != _wasPlaying) {
         _wasPlaying = value.isPlaying;
         if (value.isPlaying) {
-          _kick();
+          if (!_suppressGestureAutoShow) _kick();
         } else {
           _hideTimer?.cancel();
         }
@@ -517,11 +518,15 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _hideControlsForGesture() {
+    // Keep player-state callbacks from reopening the full controls after a gesture.
+    _suppressGestureAutoShow = true;
     _hideTimer?.cancel();
     if (mounted && _visible) setState(() => _visible = false);
   }
 
   void _toggleUi() {
+    // A deliberate screen tap is the only action that clears gesture suppression.
+    _suppressGestureAutoShow = false;
     if (_visible) {
       _hideTimer?.cancel();
       setState(() => _visible = false);
