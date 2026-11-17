@@ -35,7 +35,6 @@ flutter:
   assets:
     - assets/images/MovieFox_BlueFox_3072.png
     - assets/images/MovieFox_Launcher_1024.png
-    - assets/images/MovieFox_BlueFox.svg
 
 flutter_launcher_icons:
   android: true
