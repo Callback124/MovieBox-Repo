@@ -349,9 +349,6 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
-      - name: Generate MovieFox launcher icon
-        run: dart run flutter_launcher_icons
-
       - name: Enable high-resolution ExoPlayer playback and decoder fallback
         run: |
           python3 - <<'PY'
