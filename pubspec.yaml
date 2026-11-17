@@ -32,10 +32,14 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/MovieFox_BlueFox_3072.png
+    - assets/images/MovieFox_Launcher_1024.png
+    - assets/images/MovieFox_BlueFox.svg
 
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: assets/images/moviefox_icon.jpg
+  image_path: assets/images/MovieFox_Launcher_1024.png
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: assets/images/moviefox_icon.jpg
+  adaptive_icon_foreground: assets/images/MovieFox_Launcher_1024.png
