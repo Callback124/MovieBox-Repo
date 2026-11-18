@@ -195,8 +195,8 @@ class PosterCard extends StatelessWidget {
         children: [
           Poster(url: item.poster, title: item.title, progress: progress, corner: item.corner,
               fallbackUrl: item.posterFallback,
-              fit: imageFit ?? (item.pid == 'jiotv' ? BoxFit.contain : BoxFit.cover),
-              aspectRatio: item.pid == 'jiotv' ? 16 / 9 : 2 / 3),
+              fit: imageFit ?? BoxFit.cover,
+              aspectRatio: 2 / 3),
           const SizedBox(height: 6),
           Expanded(
             child: Text.rich(
