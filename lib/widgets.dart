@@ -163,14 +163,14 @@ class PosterCard extends StatelessWidget {
     required this.onTap,
     this.subtitle,
     this.progress,
-    this.imageFit = BoxFit.cover,
+    this.imageFit,
   });
 
   final Item item;
   final VoidCallback onTap;
   final String? subtitle;
   final double? progress;
-  final BoxFit imageFit;
+  final BoxFit? imageFit;
 
   @override
   Widget build(BuildContext context) {
@@ -182,7 +182,8 @@ class PosterCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Poster(url: item.poster, title: item.title, progress: progress, corner: item.corner,
-              fallbackUrl: item.posterFallback, fit: imageFit),
+              fallbackUrl: item.posterFallback,
+              fit: imageFit ?? (item.pid == 'jiotv' ? BoxFit.contain : BoxFit.cover)),
           const SizedBox(height: 6),
           Expanded(
             child: Text.rich(

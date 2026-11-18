@@ -30,6 +30,7 @@ class JioTvAdapter extends Adapter {
   };
 
   static const _categoryNames = <int, String>{
+    0: 'All',
     5: 'Entertainment',
     6: 'Movies',
     8: 'Sports',
