@@ -268,8 +268,9 @@ class JioTvAdapter extends Adapter {
         if (child is String &&
             (child.startsWith('http://') || child.startsWith('https://'))) {
           final directKey = {
-            'streamurl', 'playurl', 'playbackurl', 'm3u8', 'hls',
-            'hlsurl', 'manifesturl', 'videourl', 'channelurl',
+            'streamurl', 'stream', 'playurl', 'playbackurl', 'playback',
+            'm3u8', 'hls', 'hlsurl', 'manifesturl', 'videourl',
+            'channelurl', 'url', 'link', 'src', 'file', 'video',
           }.contains(key);
           if (directKey || (context &&
               (key == 'url' || key == 'link' || key == 'src' || key == 'file')) ||
