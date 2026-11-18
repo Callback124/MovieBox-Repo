@@ -34,6 +34,9 @@ class AppState extends ChangeNotifier {
     if (!providers.any((p) => p.id == 'freereels')) {
       providers.add(ProviderDef.freeReels());
     }
+    if (!providers.any((p) => p.id == 'jiotv')) {
+      providers.add(ProviderDef.jioTv());
+    }
     _saveProviders();
     library = _readList('library').map(Item.fromJson).toList();
     progress = {};

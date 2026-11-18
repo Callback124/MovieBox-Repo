@@ -133,10 +133,12 @@ class _MovieFoxShellState extends State<MovieFoxShell> {
     const movieBox = 'https://h5-static.aoneroom.com/ssrStatic/mbOfficial/public/_nuxt/image-1.apJjVir2.svg';
     const storyTv = 'https://play-lh.googleusercontent.com/A5ISR8CT9j9gTFpqTSJBXwvxWKk1WmJlJ8-WRl7dYUzI0U3srRPCF0t6_sX6Jvfl1Su1_-p0R5k9wd4fur79VQ';
     const freeReels = 'https://cdn.aptoide.com/imgs/f/1/c/f1c5e0e44aeeb449090037d9088cb0d2_icon.png';
+    const jioTv = 'https://play-lh.googleusercontent.com/nB9r04Z3hpl-iA4dChI2ontKxsJKjPi1N-WsXrMngMRH3Js31M3lKpdO0gZqvfsIQK-x';
     const jioSaavn = 'https://play-lh.googleusercontent.com/tJwz_QkxqQN1yFfb8ItXc2hpfzzSfxA-sdqaPGv51ldOFDXCMSmG0coD0uCzKo5y28rJLzyiIY7tmCHiuOOtdKM';
     if (kind == 'moviebox') return SvgPicture.network(movieBox, width: 27, height: 27, fit: BoxFit.contain, placeholderBuilder: (_) => const Icon(Icons.movie_creation_outlined, size: 24));
-    final url = kind == 'storytv' ? storyTv : kind == 'freereels' ? freeReels : jioSaavn;
-    return Image.network(url, width: 27, height: 27, fit: BoxFit.contain, errorBuilder: (_, __, ___) => Icon(kind == 'storytv' ? Icons.smart_display_outlined : kind == 'freereels' ? Icons.video_library_outlined : Icons.music_note_rounded, size: 24));
+    final url = kind == 'storytv' ? storyTv : kind == 'freereels' ? freeReels : kind == 'jiotv' ? jioTv : jioSaavn;
+    final fallback = kind == 'storytv' ? Icons.smart_display_outlined : kind == 'freereels' ? Icons.video_library_outlined : kind == 'jiotv' ? Icons.live_tv_rounded : Icons.music_note_rounded;
+    return Image.network(url, width: 27, height: 27, fit: BoxFit.contain, errorBuilder: (_, __, ___) => Icon(fallback, size: 24));
   }
 
   void _chooseProvider(BuildContext context) {

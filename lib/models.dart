@@ -71,6 +71,7 @@ class Item {
     this.type = 'movie',
     required this.title,
     this.poster,
+    this.posterFallback,
     this.year,
     this.plot,
     this.bg,
@@ -89,6 +90,7 @@ class Item {
   final String type;
   final String title;
   final String? poster;
+  final String? posterFallback;
   final String? year;
   final String? plot;
   final String? bg;
@@ -107,6 +109,7 @@ class Item {
     String? id,
     String? title,
     String? poster,
+    String? posterFallback,
     String? year,
     String? plot,
     String? bg,
@@ -125,6 +128,7 @@ class Item {
         type: type,
         title: title ?? this.title,
         poster: poster ?? this.poster,
+        posterFallback: posterFallback ?? this.posterFallback,
         year: year ?? this.year,
         plot: plot ?? this.plot,
         bg: bg ?? this.bg,
@@ -144,6 +148,7 @@ class Item {
         'type': type,
         'title': title,
         'poster': poster,
+        'posterFallback': posterFallback,
         'year': year,
         'plot': (plot ?? '').length > 400 ? plot!.substring(0, 400) : plot,
         'detailPath': detailPath,
@@ -157,6 +162,7 @@ class Item {
         type: (j['type'] ?? 'movie').toString(),
         title: (j['title'] ?? '').toString(),
         poster: j['poster']?.toString(),
+        posterFallback: j['posterFallback']?.toString(),
         year: j['year']?.toString(),
         plot: j['plot']?.toString(),
         detailPath: j['detailPath']?.toString(),
@@ -243,6 +249,9 @@ class ProviderDef {
   factory ProviderDef.freeReels() => const ProviderDef(
       id: 'freereels', kind: 'freereels', name: 'Free Reels', builtin: true);
 
+  factory ProviderDef.jioTv() => const ProviderDef(
+      id: 'jiotv', kind: 'jiotv', name: 'JioTV', builtin: true);
+
   ProviderDef copyWith({bool? enabled}) => ProviderDef(
         id: id,
         kind: kind,
@@ -255,7 +264,7 @@ class ProviderDef {
       );
 
   String get kindLabel => switch (kind) {
-        'moviebox' || 'storytv' || 'freereels' => 'Built-in',
+        'moviebox' || 'storytv' || 'freereels' || 'jiotv' => 'Built-in',
         'stremio' => 'Stremio addon',
         'json' => 'JSON catalog',
         _ => kind,

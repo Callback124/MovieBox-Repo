@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
 import 'store.dart';
+import 'jiotv_service.dart';
 
 /* ---------- networking ---------- */
 
@@ -97,6 +98,7 @@ abstract class Adapter {
 Adapter adapterFor(ProviderDef p) => switch (p.kind) {
       'storytv' => StoryTvAdapter(),
       'freereels' => FreeReelsAdapter(),
+      'jiotv' => JioTvAdapter(),
       'moviebox' => MovieBoxAdapter(),
       'stremio' => StremioAdapter(),
       'json' => JsonAdapter(),

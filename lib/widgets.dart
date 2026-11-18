@@ -64,12 +64,14 @@ String _optimizedPosterUrl(String? raw) {
 }
 
 class Poster extends StatelessWidget {
-  const Poster({super.key, required this.url, required this.title, this.progress, this.corner});
+  const Poster({super.key, required this.url, required this.title, this.progress, this.corner, this.fallbackUrl, this.fit = BoxFit.cover});
 
   final String? url;
   final String title;
   final double? progress;
   final String? corner;
+  final String? fallbackUrl;
+  final BoxFit fit;
 
   @override
   Widget build(BuildContext context) {
@@ -89,7 +91,7 @@ class Poster extends StatelessWidget {
               CachedNetworkImage(
                 cacheManager: AppImageCache.instance,
                 imageUrl: _optimizedPosterUrl(url),
-                fit: BoxFit.cover,
+                fit: fit,
                 memCacheWidth: 180,
                 memCacheHeight: 270,
                 maxWidthDiskCache: 360,
@@ -97,7 +99,21 @@ class Poster extends StatelessWidget {
                 fadeInDuration: Duration.zero,
                 fadeOutDuration: Duration.zero,
                 placeholder: (_, __) => const SizedBox.expand(),
-                errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                errorWidget: (_, __, ___) => isHttp(fallbackUrl) && fallbackUrl != url
+                    ? CachedNetworkImage(
+                        cacheManager: AppImageCache.instance,
+                        imageUrl: fallbackUrl!,
+                        fit: fit,
+                        memCacheWidth: 180,
+                        memCacheHeight: 270,
+                        maxWidthDiskCache: 360,
+                        maxHeightDiskCache: 540,
+                        fadeInDuration: Duration.zero,
+                        fadeOutDuration: Duration.zero,
+                        placeholder: (_, __) => const SizedBox.expand(),
+                        errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                      )
+                    : const SizedBox.shrink(),
               ),
             if (corner != null && corner!.trim().isNotEmpty)
               Positioned(
@@ -147,12 +163,14 @@ class PosterCard extends StatelessWidget {
     required this.onTap,
     this.subtitle,
     this.progress,
+    this.imageFit = BoxFit.cover,
   });
 
   final Item item;
   final VoidCallback onTap;
   final String? subtitle;
   final double? progress;
+  final BoxFit imageFit;
 
   @override
   Widget build(BuildContext context) {
@@ -163,7 +181,8 @@ class PosterCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Poster(url: item.poster, title: item.title, progress: progress, corner: item.corner),
+          Poster(url: item.poster, title: item.title, progress: progress, corner: item.corner,
+              fallbackUrl: item.posterFallback, fit: imageFit),
           const SizedBox(height: 6),
           Expanded(
             child: Text.rich(
