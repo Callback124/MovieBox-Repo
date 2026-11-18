@@ -55,12 +55,6 @@ class SearchPageState extends State<SearchPage> {
   void initState() {
     super.initState();
     _scroll = ScrollController();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _scroll = ScrollController();
     _loadRecentSearches();
   }
 
