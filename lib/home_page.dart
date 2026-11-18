@@ -103,7 +103,7 @@ class _ProviderSectionState extends State<_ProviderSection> {
                 child: Text('${p.name} has no home catalogs. Try Search.'),
               );
             }
-            return (p.kind == 'storytv' || p.kind == 'freereels' || p.kind == 'jiotv')
+            return (p.kind == 'storytv' || p.kind == 'freereels')
                 ? _StoryTvGrid(items: shelves.expand((s) => s.items).toList(), provider: p, scrollController: widget.scrollController)
                 : Column(children: [for (final s in shelves) ShelfRow(shelf: s)]);
           },
@@ -240,9 +240,7 @@ class _StoryTvGrid extends StatefulWidget {
 
 class _StoryTvGridState extends State<_StoryTvGrid> {
   late final List<Item> _allItems = [...widget.items];
-  late final List<Item> _items = widget.provider.kind == 'jiotv'
-      ? _allItems.take(60).toList()
-      : [...widget.items];
+  late final List<Item> _items = [...widget.items];
   int _page = 0;
   bool _hasMore = true;
   bool _loadingMore = false;
@@ -255,9 +253,7 @@ class _StoryTvGridState extends State<_StoryTvGrid> {
     widget.scrollController.addListener(_onScroll);
     _hasMore = widget.provider.kind == 'storytv'
         ? StoryTvAdapter.homeHasMore(widget.provider.id)
-        : widget.provider.kind == 'freereels'
-            ? FreeReelsAdapter.hasMoreFor(widget.provider.id)
-            : _items.length < _allItems.length;
+        : FreeReelsAdapter.hasMoreFor(widget.provider.id);
     WidgetsBinding.instance.addPostFrameCallback((_) => _onScroll());
   }
 
@@ -290,7 +286,7 @@ class _StoryTvGridState extends State<_StoryTvGrid> {
           ? (await StoryTvAdapter().explorePage(widget.provider, page: _page + 1)).items
           : widget.provider.kind == 'freereels'
               ? await FreeReelsAdapter().loadMore(widget.provider)
-              : _allItems.skip(_items.length).take(60).toList();
+              : await FreeReelsAdapter().loadMore(widget.provider);
       if (!mounted) return;
       final seen = _items.map((e) => e.id).toSet();
       final fresh = nextItems.where((e) => seen.add(e.id)).toList();
@@ -298,9 +294,7 @@ class _StoryTvGridState extends State<_StoryTvGrid> {
         _items.addAll(fresh);
         _page++;
         _emptyPages = fresh.isEmpty ? _emptyPages + 1 : 0;
-        _hasMore = widget.provider.kind == 'jiotv'
-            ? _items.length < _allItems.length
-            : (widget.provider.kind == 'storytv'
+        _hasMore = (widget.provider.kind == 'storytv'
                 ? StoryTvAdapter.homeHasMore(widget.provider.id)
                 : FreeReelsAdapter.hasMoreFor(widget.provider.id)) && _emptyPages < 5;
         _loadingMore = false;
@@ -330,7 +324,6 @@ class _StoryTvGridState extends State<_StoryTvGrid> {
           ),
           itemBuilder: (context, i) => PosterCard(
             item: _items[i],
-            imageFit: widget.provider.kind == 'jiotv' ? BoxFit.contain : BoxFit.cover,
             onTap: () => openDetail(context, _items[i]),
           ),
         ),
