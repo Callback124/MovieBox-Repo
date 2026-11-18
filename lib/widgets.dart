@@ -76,6 +76,9 @@ class Poster extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // Channel logos use their source aspect ratio; do not decode them into
+    // the fixed portrait-poster dimensions used by movie artwork.
+    final preserveSourceAspectRatio = fit == BoxFit.contain;
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: AspectRatio(
@@ -93,9 +96,9 @@ class Poster extends StatelessWidget {
                 imageUrl: _optimizedPosterUrl(url),
                 fit: fit,
                 memCacheWidth: 180,
-                memCacheHeight: 270,
+                memCacheHeight: preserveSourceAspectRatio ? null : 270,
                 maxWidthDiskCache: 360,
-                maxHeightDiskCache: 540,
+                maxHeightDiskCache: preserveSourceAspectRatio ? null : 540,
                 fadeInDuration: Duration.zero,
                 fadeOutDuration: Duration.zero,
                 placeholder: (_, __) => const SizedBox.expand(),
@@ -105,9 +108,9 @@ class Poster extends StatelessWidget {
                         imageUrl: fallbackUrl!,
                         fit: fit,
                         memCacheWidth: 180,
-                        memCacheHeight: 270,
+                        memCacheHeight: preserveSourceAspectRatio ? null : 270,
                         maxWidthDiskCache: 360,
-                        maxHeightDiskCache: 540,
+                        maxHeightDiskCache: preserveSourceAspectRatio ? null : 540,
                         fadeInDuration: Duration.zero,
                         fadeOutDuration: Duration.zero,
                         placeholder: (_, __) => const SizedBox.expand(),
