@@ -883,7 +883,12 @@ class JioTvEpgService {
 
     var licenseUrl = pipe['drmlicense'];
     if (licenseUrl == null || !licenseUrl.startsWith('http')) {
-      licenseUrl = _stringAcross(maps, ['license_url', 'licenseUrl']);
+      final mappedLicense = _stringAcross(maps, [
+        'license_url', 'licenseUrl', 'drmLicense',
+      ]);
+      licenseUrl = mappedLicense != null && mappedLicense.startsWith('http')
+          ? mappedLicense
+          : null;
     }
     final rawScheme = (pipe['drmscheme'] ??
         _stringAcross(maps, ['drm_scheme', 'drmScheme']) ?? '').toLowerCase();
