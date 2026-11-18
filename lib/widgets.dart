@@ -64,7 +64,16 @@ String _optimizedPosterUrl(String? raw) {
 }
 
 class Poster extends StatelessWidget {
-  const Poster({super.key, required this.url, required this.title, this.progress, this.corner, this.fallbackUrl, this.fit = BoxFit.cover});
+  const Poster({
+    super.key,
+    required this.url,
+    required this.title,
+    this.progress,
+    this.corner,
+    this.fallbackUrl,
+    this.fit = BoxFit.cover,
+    this.aspectRatio = 2 / 3,
+  });
 
   final String? url;
   final String title;
@@ -72,6 +81,7 @@ class Poster extends StatelessWidget {
   final String? corner;
   final String? fallbackUrl;
   final BoxFit fit;
+  final double aspectRatio;
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +89,7 @@ class Poster extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: AspectRatio(
-        aspectRatio: 2 / 3,
+        aspectRatio: aspectRatio,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -183,7 +193,8 @@ class PosterCard extends StatelessWidget {
         children: [
           Poster(url: item.poster, title: item.title, progress: progress, corner: item.corner,
               fallbackUrl: item.posterFallback,
-              fit: imageFit ?? (item.pid == 'jiotv' ? BoxFit.contain : BoxFit.cover)),
+              fit: imageFit ?? (item.pid == 'jiotv' ? BoxFit.contain : BoxFit.cover),
+              aspectRatio: item.pid == 'jiotv' ? 16 / 9 : 2 / 3),
           const SizedBox(height: 6),
           Expanded(
             child: Text.rich(

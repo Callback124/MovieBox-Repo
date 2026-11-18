@@ -63,9 +63,19 @@ class JioTvAdapter extends Adapter {
     15: 'Nepali',
   };
 
+  static const _workerEndpoint =
+      'https://eliteapiyash.streamxlive.workers.dev';
+  static const _workerUserAgent =
+      'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36';
+  static const _workerHeaders = <String, String>{
+    'User-Agent': _workerUserAgent,
+    'Accept': 'application/json',
+  };
+
   static final http.Client _client = http.Client();
   static List<Item>? _channelCache;
   static Future<List<Item>>? _channelFlight;
+  static final Map<String, Map<String, dynamic>> _rawChannelCache = {};
 
   String? _first(Map raw, List<String> keys) {
     for (final key in keys) {
@@ -368,6 +378,10 @@ class JioTvAdapter extends Adapter {
             : _mergeMissing(current, Map<String, dynamic>.from(channel));
       }
 
+      _rawChannelCache
+        ..clear()
+        ..addAll(merged);
+
       final ordered = merged.values.toList()
         ..sort((a, b) {
           final orderA = int.tryParse(_first(a, [
@@ -416,18 +430,589 @@ class JioTvAdapter extends Adapter {
         (item.plot ?? '').toLowerCase().contains(q)).toList();
   }
 
+
+  List<Map> _flattenPlaybackMaps(dynamic value) {
+    final result = <Map>[];
+    final visited = <int>{};
+    void visit(dynamic node, int depth) {
+      if (depth > 7 || node == null) return;
+      if (node is List) {
+        for (final entry in node) {
+          visit(entry, depth + 1);
+        }
+        return;
+      }
+      if (node is! Map) return;
+      if (!visited.add(identityHashCode(node))) return;
+      result.add(node);
+      for (final key in [
+        'data', 'result', 'play_data', 'playData', 'playback',
+        'playbackInfo', 'playback_info', 'stream', 'source',
+      ]) {
+        if (node.containsKey(key)) visit(node[key], depth + 1);
+      }
+    }
+    visit(value, 0);
+    return result;
+  }
+
+  String? _stringAcross(List<Map> maps, List<String> keys) {
+    for (final key in keys) {
+      for (final map in maps) {
+        for (final entry in map.entries) {
+          if (entry.key.toString().toLowerCase() != key.toLowerCase()) continue;
+          final value = entry.value;
+          if (value is String || value is num) {
+            final text = value.toString().trim();
+            if (text.isNotEmpty && text.toLowerCase() != 'null') return text;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  Map<String, String> _pipeParameters(String raw) {
+    final result = <String, String>{};
+    for (final part in raw.split('&')) {
+      final index = part.indexOf('=');
+      if (index <= 0) continue;
+      try {
+        final key = Uri.decodeComponent(part.substring(0, index)).trim().toLowerCase();
+        final value = Uri.decodeComponent(part.substring(index + 1)).trim();
+        if (key.isNotEmpty && value.isNotEmpty) result[key] = value;
+      } catch (_) {}
+    }
+    return result;
+  }
+
+  String _hexToBase64Url(String value) {
+    final clean = value.trim().replaceAll('-', '');
+    if (clean.length == 32 && RegExp(r'^[0-9a-fA-F]{32}
+}
+
+
+class JioTvProgram {
+  const JioTvProgram({
+    required this.id,
+    required this.channelId,
+    required this.title,
+    required this.description,
+    required this.startEpochMs,
+    required this.endEpochMs,
+    required this.posterUrl,
+    required this.thumbnailUrl,
+    required this.category,
+    required this.genre,
+    required this.starCast,
+    required this.director,
+  });
+
+  final String id;
+  final String channelId;
+  final String title;
+  final String description;
+  final int startEpochMs;
+  final int endEpochMs;
+  final String? posterUrl;
+  final String? thumbnailUrl;
+  final String category;
+  final String genre;
+  final String starCast;
+  final String director;
+
+  bool isLiveAt([DateTime? at]) {
+    final now = (at ?? DateTime.now()).millisecondsSinceEpoch;
+    return now >= startEpochMs && now < endEpochMs;
+  }
+
+  bool isPastAt([DateTime? at]) {
+    final now = (at ?? DateTime.now()).millisecondsSinceEpoch;
+    return endEpochMs <= now;
+  }
+
+  String statusAt([DateTime? at]) =>
+      isLiveAt(at) ? 'LIVE' : (isPastAt(at) ? 'CATCH-UP' : 'UPCOMING');
+
+  double progressAt([DateTime? at]) {
+    final now = (at ?? DateTime.now()).millisecondsSinceEpoch;
+    final span = endEpochMs - startEpochMs;
+    if (span <= 0) return 0;
+    return ((now - startEpochMs) / span).clamp(0.0, 1.0).toDouble();
+  }
+
+  int get durationMinutes =>
+      ((endEpochMs - startEpochMs) / 60000).round();
+
+  String get timeLabel =>
+      _formatTime(startEpochMs) + ' - ' + _formatTime(endEpochMs);
+
+  static String _formatTime(int epochMs) {
+    final time = DateTime.fromMillisecondsSinceEpoch(epochMs);
+    final hour = time.hour % 12 == 0 ? 12 : time.hour % 12;
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute ' + (time.hour >= 12 ? 'PM' : 'AM');
+  }
+}
+
+/// EPG cache is scoped to channel + day offset. Selected day is loaded first;
+/// the remaining 14 days are warmed in nearest-first order with max 10 requests.
+class JioTvEpgService {
+  static const _endpoint =
+      'https://jiotv.data.cdn.jio.com/apis/v1.3/getepg/get';
+  static const _cacheTtl = Duration(minutes: 10);
+  static const _headers = <String, String>{
+    'User-Agent': 'JioTV',
+    'x-api-key': 'l7xx75e822925f184370b2e25170c5d5820a',
+    'Origin': 'https://www.jiotv.com',
+    'Referer': 'https://www.jiotv.com/tv-guide',
+    'Accept': 'application/json',
+    'appkey': 'NzNiMDhlYzQyNjJm',
+    'os': 'android',
+    'devicetype': 'phone',
+  };
+
+  static final http.Client _client = http.Client();
+  static final Map<String, List<JioTvProgram>> _cache = {};
+  static final Map<String, DateTime> _cacheTimes = {};
+  static final Map<String, Future<List<JioTvProgram>>> _inFlight = {};
+
+  static String _key(String channelId, int offset) => '$channelId|$offset';
+
+  static String _text(dynamic value) {
+    if (value == null) return '';
+    if (value is List) {
+      return value.map(_text).where((x) => x.isNotEmpty).join(', ').trim();
+    }
+    return value.toString().trim();
+  }
+
+  static int? _epoch(dynamic value) {
+    if (value == null) return null;
+    final parsed = value is num
+        ? value.toDouble()
+        : double.tryParse(value.toString().trim());
+    if (parsed == null || parsed <= 0) return null;
+    final integer = parsed.round();
+    return integer < 10000000000 ? integer * 1000 : integer;
+  }
+
+  static DateTime? _timeForOffset(dynamic value, int offset) {
+    final raw = _text(value);
+    if (raw.isEmpty) return null;
+    final parts = raw.split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    final second = parts.length > 2 ? (int.tryParse(parts[2]) ?? 0) : 0;
+    if (hour == null || minute == null || hour < 0 || hour > 23 ||
+        minute < 0 || minute > 59 || second < 0 || second > 59) {
+      return null;
+    }
+    final now = DateTime.now();
+    final day = DateTime(now.year, now.month, now.day).add(Duration(days: offset));
+    return DateTime(day.year, day.month, day.day, hour, minute, second);
+  }
+
+  static String? _imageUrl(dynamic value) {
+    final raw = _text(value);
+    if (raw.isEmpty) return null;
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    final path = raw.replaceFirst(RegExp(r'^/+'), '');
+    if (path.startsWith('dare_images/')) {
+      return 'https://jiotv.catchup.cdn.jio.com/' + path;
+    }
+    return 'https://jiotv.catchup.cdn.jio.com/dare_images/shows/' + path;
+  }
+
+  static JioTvProgram? _parse(Map raw, String channelId, int offset) {
+    final start = _epoch(raw['startEpoch']) ??
+        _timeForOffset(raw['showtime'], offset)?.millisecondsSinceEpoch;
+    if (start == null) return null;
+
+    var end = _epoch(raw['endEpoch']) ??
+        _timeForOffset(raw['endtime'], offset)?.millisecondsSinceEpoch;
+    if (end == null) {
+      end = start + 3600000;
+    } else if (end <= start && raw['endEpoch'] == null) {
+      end += 86400000;
+    }
+    if (end <= start) end = start + 3600000;
+
+    final showName = _text(raw['showname']);
+    final showTitle = _text(raw['showtitle']);
+    final title = showName.isNotEmpty
+        ? showName
+        : (showTitle.isNotEmpty ? showTitle : 'Program');
+    final genre = _text(raw['showGenre']);
+    final showCategory = _text(raw['showCategory']);
+    final category = showCategory.isNotEmpty
+        ? showCategory
+        : (genre.isNotEmpty ? genre : 'TV Show');
+    final srno = _text(raw['srno']);
+    final poster = _imageUrl(raw['episodePoster']);
+    final thumbnail = _imageUrl(raw['episodeThumbnail']) ?? poster;
+
+    return JioTvProgram(
+      id: srno.isNotEmpty ? srno : channelId + '_' + start.toString(),
+      channelId: channelId,
+      title: title,
+      description: _text(raw['description']).isNotEmpty
+          ? _text(raw['description'])
+          : 'No episode synopsis available.',
+      startEpochMs: start,
+      endEpochMs: end,
+      posterUrl: poster,
+      thumbnailUrl: thumbnail,
+      category: category,
+      genre: genre,
+      starCast: _text(raw['starCast']),
+      director: _text(raw['director']),
+    );
+  }
+
+  static Future<List<JioTvProgram>> loadDay(
+    String channelId,
+    int offset, {
+    bool forceRefresh = false,
+  }) async {
+    if (offset < -7 || offset > 7) {
+      throw ArgumentError.value(offset, 'offset', 'EPG offset must be -7..7');
+    }
+    final key = _key(channelId, offset);
+    final cached = _cache[key];
+    final cachedAt = _cacheTimes[key];
+    if (!forceRefresh && cached != null && cachedAt != null &&
+        DateTime.now().difference(cachedAt) < _cacheTtl) {
+      return cached;
+    }
+    if (_inFlight.containsKey(key)) return _inFlight[key]!;
+
+    final future = () async {
+      final uri = Uri.parse(_endpoint).replace(queryParameters: {
+        'offset': offset.toString(),
+        'channel_id': channelId,
+        'langId': '6',
+      });
+      final response = await _client.get(uri, headers: _headers)
+          .timeout(const Duration(seconds: 22));
+      if (response.statusCode != 200) {
+        throw ProviderError('JioTV EPG HTTP ' + response.statusCode.toString());
+      }
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is! Map || decoded['epg'] is! List) {
+        throw ProviderError('JioTV EPG response is missing epg[].');
+      }
+      final programs = (decoded['epg'] as List)
+          .whereType<Map>()
+          .map((entry) => _parse(entry, channelId, offset))
+          .whereType<JioTvProgram>()
+          .toList()
+        ..sort((a, b) => a.startEpochMs.compareTo(b.startEpochMs));
+      _cache[key] = programs;
+      _cacheTimes[key] = DateTime.now();
+      return programs;
+    }();
+
+    _inFlight[key] = future;
+    try {
+      return await future;
+    } finally {
+      _inFlight.remove(key);
+    }
+  }
+
+  static Future<void> prefetch(
+    String channelId, {
+    int selectedOffset = 0,
+  }) async {
+    await loadDay(channelId, selectedOffset);
+    final offsets = <int>[];
+    for (var distance = 1; distance <= 7; distance++) {
+      for (final offset in [-distance, distance]) {
+        if (offset != selectedOffset) offsets.add(offset);
+      }
+    }
+    var next = 0;
+    final workers = offsets.length < 10 ? offsets.length : 10;
+    await Future.wait(List.generate(workers, (_) async {
+      while (next < offsets.length) {
+        final offset = offsets[next++];
+        try {
+          await loadDay(channelId, offset);
+        } catch (_) {
+          // A failed day remains retryable when the user opens that date.
+        }
+      }
+    }));
+  }
+}
+).hasMatch(clean)) {
+      final bytes = <int>[
+        for (var i = 0; i < 32; i += 2)
+          int.parse(clean.substring(i, i + 2), radix: 16),
+      ];
+      return base64Url.encode(bytes).replaceAll('=', '');
+    }
+    return clean.replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+  }
+
+  Map<String, String> _parseClearKeyPairs(Iterable<dynamic> values) {
+    final pairs = <String, String>{};
+    void add(dynamic value) {
+      if (value == null) return;
+      if (value is Map) {
+        final keys = value['keys'];
+        if (keys is List) {
+          for (final entry in keys.whereType<Map>()) {
+            final kid = _first(entry, ['kid', 'keyId', 'key_id']);
+            final key = _first(entry, ['k', 'key', 'value']);
+            if (kid != null && key != null) pairs[kid] = key;
+          }
+        } else {
+          for (final entry in value.entries) {
+            if (entry.value != null &&
+                entry.key.toString().toLowerCase() != 'type') {
+              pairs[entry.key.toString()] = entry.value.toString();
+            }
+          }
+        }
+        return;
+      }
+      if (value is! String) return;
+      final text = value.trim();
+      if (text.isEmpty || text.startsWith('http://') || text.startsWith('https://')) return;
+      if (text.startsWith('{')) {
+        try {
+          add(jsonDecode(text));
+          return;
+        } catch (_) {}
+      }
+      for (final part in text.split(RegExp(r'[,;\n]+'))) {
+        final index = part.indexOf(':');
+        if (index <= 0) continue;
+        final kid = part.substring(0, index).trim();
+        final key = part.substring(index + 1).trim();
+        if (kid.isNotEmpty && key.isNotEmpty) pairs[kid] = key;
+      }
+    }
+
+    for (final value in values) {
+      add(value);
+    }
+    return pairs;
+  }
+
+  Source? _candidateFromMaps(List<Map> maps, {required String name, bool worker = false}) {
+    if (maps.isEmpty) return null;
+    if (worker) {
+      final status = (_stringAcross(maps, ['status']) ?? '').toLowerCase();
+      if (status == 'error' || status == 'failed') return null;
+    }
+
+    final readyLink = _stringAcross(maps, ['ready_to_use_link']);
+    var rawUrl = readyLink ?? _stringAcross(maps, [
+      'channel_url', 'stream_url', 'streamUrl', 'play_url',
+      'mpd_url', 'm3u8_url', 'hls_url',
+    ]);
+    if (rawUrl == null && maps.length > 1) {
+      rawUrl = _stringAcross(maps.skip(1).toList(), ['url', 'link']);
+    }
+    if (rawUrl == null) {
+      final generic = _stringAcross([maps.first], ['url', 'link']);
+      final hasPlaybackContext = _stringAcross(maps, [
+        'status', 'cookie', 'drmScheme', 'drm_scheme', 'mimeTypeHint',
+        'playbackInfo', 'playback_info',
+      ]) != null;
+      if (generic != null && (_looksLikeVideoUrl(generic) || hasPlaybackContext)) {
+        rawUrl = generic;
+      }
+    }
+    if (rawUrl == null) return null;
+
+    var cleanUrl = rawUrl;
+    final pipe = <String, String>{};
+    final pipeIndex = rawUrl.indexOf('|');
+    if (pipeIndex >= 0) {
+      cleanUrl = rawUrl.substring(0, pipeIndex).trim();
+      pipe.addAll(_pipeParameters(rawUrl.substring(pipeIndex + 1)));
+    }
+    if (!isHttp(cleanUrl)) return null;
+
+    final headers = <String, String>{
+      'User-Agent': _workerUserAgent,
+      'Accept': '*/*',
+    };
+    for (final map in maps) {
+      for (final key in ['headers', 'httpHeaders', 'streamHeaders']) {
+        final supplied = map[key];
+        if (supplied is Map) {
+          for (final entry in supplied.entries) {
+            if (entry.value != null) {
+              headers[entry.key.toString()] = entry.value.toString();
+            }
+          }
+        }
+      }
+    }
+    final userAgent = _stringAcross(maps, ['userAgent', 'user_agent']);
+    final cookie = pipe['cookie'] ?? _stringAcross(maps, ['cookie']);
+    final referer = _stringAcross(maps, ['referer', 'referrer']);
+    final origin = _stringAcross(maps, ['origin']);
+    if (userAgent != null) headers['User-Agent'] = userAgent;
+    if (cookie != null) headers['Cookie'] = cookie;
+    if (referer != null) headers['Referer'] = referer;
+    if (origin != null) headers['Origin'] = origin;
+
+    final keyValues = <dynamic>[];
+    for (final map in maps) {
+      for (final key in ['all_keys', 'allKeys', 'drmLicense', 'clearkey', 'clearKey']) {
+        if (map.containsKey(key)) keyValues.add(map[key]);
+      }
+    }
+    if (pipe['drmlicense'] != null &&
+        !pipe['drmlicense']!.startsWith('http')) {
+      keyValues.add(pipe['drmlicense']);
+    }
+    final keyId = pipe['keyid'] ?? _stringAcross(maps, ['keyId', 'key_id', 'kid']);
+    final singleKey = _stringAcross(maps, ['key']);
+    final keyPairs = _parseClearKeyPairs(keyValues);
+    if (keyPairs.isEmpty && keyId != null && singleKey != null) {
+      keyPairs[keyId] = singleKey;
+    }
+
+    var licenseUrl = pipe['drmlicense'];
+    if (licenseUrl == null || !licenseUrl.startsWith('http')) {
+      licenseUrl = _stringAcross(maps, ['license_url', 'licenseUrl']);
+    }
+    final rawScheme = (pipe['drmscheme'] ??
+        _stringAcross(maps, ['drm_scheme', 'drmScheme']) ?? '').toLowerCase();
+    final drmScheme = keyPairs.isNotEmpty
+        ? 'clearkey'
+        : (licenseUrl != null && licenseUrl.startsWith('http')
+            ? 'widevine'
+            : rawScheme.isEmpty ? null : rawScheme);
+
+    String? clearKeyJson;
+    if (keyPairs.isNotEmpty) {
+      clearKeyJson = jsonEncode({
+        'keys': [
+          for (final entry in keyPairs.entries)
+            {
+              'kty': 'oct',
+              'kid': _hexToBase64Url(entry.key),
+              'k': _hexToBase64Url(entry.value),
+            },
+        ],
+        'type': 'temporary',
+      });
+    }
+
+    var mimeTypeHint = pipe['mimetypehint'] ??
+        _stringAcross(maps, ['mimeTypeHint', 'mime_type', 'format']);
+    final lowerUrl = cleanUrl.toLowerCase();
+    mimeTypeHint ??= lowerUrl.contains('.mpd') ? 'mpd' :
+        (lowerUrl.contains('.m3u8') ? 'm3u8' : null);
+
+    return Source.clean(
+      name: name,
+      url: cleanUrl,
+      headers: headers,
+      mimeTypeHint: mimeTypeHint,
+      drmScheme: drmScheme,
+      drmLicenseUrl: licenseUrl,
+      drmClearKey: clearKeyJson,
+    );
+  }
+
+  Source? _candidateFromDynamic(dynamic value, {required String name, bool worker = false}) =>
+      _candidateFromMaps(_flattenPlaybackMaps(value), name: name, worker: worker);
+
+  Future<Source?> _fetchWorkerCandidate(String channelId) async {
+    try {
+      final uri = Uri.parse(_workerEndpoint).replace(queryParameters: {'id': channelId});
+      final response = await _client.get(uri, headers: _workerHeaders)
+          .timeout(const Duration(seconds: 18));
+      if (response.statusCode != 200) return null;
+      final json = jsonDecode(utf8.decode(response.bodyBytes));
+      return _candidateFromDynamic(json, name: 'Worker API', worker: true);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<int?> _probeManifest(Source source) async {
+    try {
+      final request = http.Request('GET', Uri.parse(source.url!));
+      request.headers.addAll(source.headers);
+      request.headers.putIfAbsent('Range', () => 'bytes=0-2047');
+      final response = await _client.send(request)
+          .timeout(const Duration(seconds: 12));
+      final subscription = response.stream.listen((_) {});
+      await subscription.cancel();
+      return response.statusCode;
+    } catch (_) {
+      // A probe timeout or network interruption should not prevent ExoPlayer
+      // from trying the candidate with the same headers.
+      return null;
+    }
+  }
+
+  Future<List<Source>> resolvePlayback(
+    Item item, {
+    bool forceRefresh = false,
+  }) async {
+    // Worker responses are deliberately never cached: every retry obtains a fresh token.
+    Map<String, dynamic>? raw = _rawChannelCache[item.id];
+    if (raw == null) {
+      try {
+        await _loadChannels();
+        raw = _rawChannelCache[item.id];
+      } catch (_) {}
+    }
+
+    final candidates = <Source>[];
+    final numericId = int.tryParse(item.id);
+    if (numericId != null && numericId > 0 && numericId < 1000000) {
+      final worker = await _fetchWorkerCandidate(item.id);
+      if (worker != null) candidates.add(worker);
+    }
+
+    final fallback = raw == null
+        ? null
+        : _candidateFromDynamic(raw, name: 'npoint fallback');
+    if (fallback != null &&
+        !candidates.any((source) => source.url == fallback.url)) {
+      candidates.add(fallback);
+    }
+    if (candidates.isEmpty && item.sources.isNotEmpty) {
+      candidates.add(item.sources.first);
+    }
+
+    final valid = <Source>[];
+    for (final candidate in candidates) {
+      final status = await _probeManifest(candidate);
+      if (status == null || status == 200 || status == 206 ||
+          (status >= 300 && status < 400)) {
+        valid.add(candidate);
+      }
+      // 403 / 410 / 451 and other HTTP errors are rejected so the next
+      // candidate (npoint) is tried before handing anything to ExoPlayer.
+    }
+    if (valid.isEmpty) {
+      throw ProviderError(
+        'JioTV stream is unavailable. Check the Indian network and retry for a fresh stream token.',
+      );
+    }
+    return valid;
+  }
+
   @override
   Future<Item> detail(ProviderDef p, Item item) async => item;
 
   @override
-  Future<List<Source>> sources(ProviderDef p, Item item, Episode? ep) async {
-    if (item.sources.isEmpty) {
-      throw ProviderError(
-        'No direct stream URL was included for this channel in the extra channels feed.',
-      );
-    }
-    return item.sources;
-  }
+  Future<List<Source>> sources(ProviderDef p, Item item, Episode? ep) async =>
+      resolvePlayback(item);
 }
 
 

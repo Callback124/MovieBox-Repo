@@ -349,6 +349,42 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
+      - name: Enable multi-session DRM for JioTV multi-key streams
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path.home() / '.pub-cache' / 'hosted' / 'pub.dev'
+          candidates = list(root.glob('better_player_plus-*/android/src/main/kotlin/**/BetterPlayer.kt'))
+          if not candidates:
+              raise SystemExit('Could not find BetterPlayer Plus Android ExoPlayer source')
+
+          patched = 0
+          for path in candidates:
+              source = path.read_text()
+              source = source.replace('.setMultiSession(false)', '.setMultiSession(true)')
+              pattern = r'(\.setUuidAndExoMediaDrmProvider\(\s*C\.CLEARKEY_UUID,[\s\S]*?\))\.build\(LocalMediaDrmCallback\(clearKey\.toByteArray\(\)\)\)'
+              source, count = re.subn(
+                  pattern,
+                  r'\1.setMultiSession(true).build(LocalMediaDrmCallback(clearKey.toByteArray()))',
+                  source,
+                  count=1,
+              )
+              if count == 0 and '.setMultiSession(true)' not in source:
+                  raise SystemExit(f'Could not enable ClearKey multi-session in {path}')
+              if '.setMultiSession(true)' not in source:
+                  raise SystemExit(f'Widevine multi-session was not enabled in {path}')
+              if 'LocalMediaDrmCallback(clearKey.toByteArray())' in source and 'setMultiSession(true).build(LocalMediaDrmCallback' not in source:
+                  raise SystemExit(f'ClearKey multi-session patch was not applied in {path}')
+              path.write_text(source)
+              patched += 1
+
+          if patched == 0:
+              raise SystemExit('No BetterPlayer Plus Android source was patched')
+          print(f'Enabled multi-session DRM in {patched} BetterPlayer Plus Android source file(s)')
+          PY
+
       - name: Generate Android launcher icons
         run: dart run flutter_launcher_icons
 

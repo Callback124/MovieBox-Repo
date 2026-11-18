@@ -9,13 +9,27 @@ bool isHttp(String? u) =>
     u != null && (u.startsWith('http://') || u.startsWith('https://'));
 
 class Source {
-  const Source({required this.name, this.url, this.link, this.note, this.headers = const {}});
+  const Source({
+    required this.name,
+    this.url,
+    this.link,
+    this.note,
+    this.headers = const {},
+    this.mimeTypeHint,
+    this.drmScheme,
+    this.drmLicenseUrl,
+    this.drmClearKey,
+  });
 
   final String name;
   final String? url;
   final String? link;
   final String? note;
   final Map<String, String> headers;
+  final String? mimeTypeHint;
+  final String? drmScheme;
+  final String? drmLicenseUrl;
+  final String? drmClearKey;
 
   /// Builds a source and drops anything that is not an http(s) link.
   factory Source.clean({
@@ -24,6 +38,10 @@ class Source {
     String? link,
     String? note,
     Map<String, String> headers = const {},
+    String? mimeTypeHint,
+    String? drmScheme,
+    String? drmLicenseUrl,
+    String? drmClearKey,
   }) =>
       Source(
         name: name.isEmpty ? 'Source' : name,
@@ -31,6 +49,10 @@ class Source {
         link: isHttp(link) ? link : null,
         note: note ?? ((url != null && !isHttp(url)) ? 'Invalid link' : null),
         headers: headers,
+        mimeTypeHint: mimeTypeHint,
+        drmScheme: drmScheme,
+        drmLicenseUrl: drmLicenseUrl,
+        drmClearKey: drmClearKey,
       );
 
   bool get playable => url != null;

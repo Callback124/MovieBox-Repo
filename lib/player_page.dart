@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
+import 'package:better_player_plus/better_player_plus.dart' as bp;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'models.dart';
@@ -11,6 +12,7 @@ import 'providers.dart';
 import 'jiosaavn_service.dart';
 import 'store.dart';
 import 'widgets.dart';
+import 'jiotv_service.dart';
 
 const Color _kSeek = Color(0xFFE8335F);
 
@@ -26,7 +28,8 @@ class PlayerPage extends StatefulWidget {
 }
 
 class _PlayerPageState extends State<PlayerPage> {
-  VideoPlayerController? _player;
+  dynamic _player;
+  bp.BetterPlayerController? _jioBetterController;
   late Item _item = widget.item;
 
   late Episode? _ep = widget.ep;
@@ -119,7 +122,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
   /* ---- sources ---- */
 
-  Future<void> _setup() async {
+  Future<void> _setup({bool forceRefresh = false}) async {
     final gen = ++_gen;
     setState(() {
       _msg = 'Finding sources…';
@@ -131,21 +134,32 @@ class _PlayerPageState extends State<PlayerPage> {
       _cur = null;
     });
     try {
-      final l = await getSources(_item, _ep);
+      final l = forceRefresh && _item.pid == 'jiotv'
+          ? await JioTvAdapter().resolvePlayback(_item, forceRefresh: true)
+          : await getSources(_item, _ep);
       if (!mounted || gen != _gen) return;
       _srcs = l;
       _failedSourceUrls.clear();
       final allowAbove1080 = _item.pid == 'moviebox';
-      final ok = l.where((s) =>
-          s.playable && (allowAbove1080 || _sourceResolution(s) == 0 || _sourceResolution(s) <= 1080)).toList()
-        ..sort((a, b) => _sourceResolution(b).compareTo(_sourceResolution(a)));
+      final ok = _item.pid == 'jiotv'
+          ? l.where((s) => s.playable).toList()
+          : (l.where((s) =>
+              s.playable && (allowAbove1080 || _sourceResolution(s) == 0 || _sourceResolution(s) <= 1080)).toList()
+            ..sort((a, b) => _sourceResolution(b).compareTo(_sourceResolution(a))));
       if (l.isEmpty) {
         _transitioning = false;
-        setState(() => _msg = 'No sources were returned by MovieBox for this episode.');
+        setState(() {
+          _msg = _item.pid == 'jiotv'
+              ? 'No JioTV stream was found. Check your Indian network and tap Retry Stream.'
+              : 'No sources were returned by MovieBox for this episode.';
+          _showPickInMsg = _item.pid == 'jiotv';
+        });
       } else if (ok.isEmpty) {
         _transitioning = false;
         setState(() {
-          _msg = 'No supported source found. This device supports up to 1080p; 4K/above streams exceed its decoder capabilities.';
+          _msg = _item.pid == 'jiotv'
+              ? 'No playable JioTV stream was found. Tap Retry Stream to get a fresh token.'
+              : 'No supported source found. This device supports up to 1080p; 4K/above streams exceed its decoder capabilities.';
           _showPickInMsg = true;
         });
       } else {
@@ -158,14 +172,19 @@ class _PlayerPageState extends State<PlayerPage> {
         }
         _transitioning = false;
         if (mounted) setState(() {
-          _msg = 'None of the available stream qualities could be played on this device.';
+          _msg = _item.pid == 'jiotv'
+              ? 'JioTV stream could not be played. Tap Retry Stream to refresh the stream token.'
+              : 'None of the available stream qualities could be played on this device.';
           _showPickInMsg = true;
           _buffering = false;
         });
       }
     } catch (e) {
       _transitioning = false;
-      if (mounted && gen == _gen) setState(() => _msg = e.toString());
+      if (mounted && gen == _gen) setState(() {
+        _msg = e.toString();
+        _showPickInMsg = _item.pid == 'jiotv';
+      });
     }
   }
 
@@ -187,6 +206,20 @@ class _PlayerPageState extends State<PlayerPage> {
           value.duration.inSeconds.toDouble());
     }
     if (value.hasError) {
+
+      if (_item.pid == 'jiotv') {
+        if (_cur?.url != null) _failedSourceUrls.add(_cur!.url!);
+        final fallback = _srcs.where((source) =>
+          source.playable && !_failedSourceUrls.contains(source.url)
+        ).toList();
+        if (fallback.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('JioTV stream failed. Trying the npoint fallback…')),
+          );
+          unawaited(_load(fallback.first));
+          return;
+        }
+      }
       if (_item.pid == 'storytv' || _item.pid == 'moviebox') {
         if (_cur?.url != null) _failedSourceUrls.add(_cur!.url!);
         Source? fallback;
@@ -204,8 +237,14 @@ class _PlayerPageState extends State<PlayerPage> {
           return;
         }
       }
+      final errorText = value.errorDescription ?? 'This source could not be played. Try another one.';
+      final message = _item.pid == 'jiotv' && errorText.contains('451')
+          ? 'HTTP 451: this stream may require an Indian IP. Try an Indian mobile network.'
+          : (_item.pid == 'jiotv' && errorText.contains('403')
+              ? 'HTTP 403: stream token may have expired. Tap Retry Stream for a fresh token.'
+              : errorText);
       setState(() {
-        _msg = value.errorDescription ?? 'This source could not be played. Try another one.';
+        _msg = message;
         _showPickInMsg = true;
       });
       return;
@@ -234,7 +273,22 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _buffering = false;
   bool _wasPlaying = false;
 
+
+  Future<void> _disposeActiveVideoController() async {
+    final old = _player;
+    old?.removeListener(_onPlayerChanged);
+    final better = _jioBetterController;
+    _jioBetterController = null;
+    _player = null;
+    if (better != null) {
+      better.dispose(forceDispose: true);
+    } else if (old != null) {
+      await old.dispose();
+    }
+  }
+
   Future<bool> _load(Source s) async {
+    if (_item.pid == 'jiotv') return _loadJioTv(s);
     await JioSaavnPlayer.instance.pauseForVideo();
     final pr = app.progress[progressKey(_item, _ep)];
     final resume = pr != null && pr.t > 5 && pr.d - pr.t > 10;
@@ -246,9 +300,7 @@ class _PlayerPageState extends State<PlayerPage> {
       _ended = false;
       _buffering = true;
     });
-    final old = _player;
-    old?.removeListener(_onPlayerChanged);
-    if (old != null) await old.dispose();
+    await _disposeActiveVideoController();
     final controller = VideoPlayerController.networkUrl(
       Uri.parse(s.url!),
       httpHeaders: s.headers,
@@ -316,6 +368,101 @@ class _PlayerPageState extends State<PlayerPage> {
       if (!mounted) return false;
       setState(() {
         _msg = 'Player error: $e';
+        _showPickInMsg = true;
+        _buffering = false;
+      });
+      return false;
+    }
+  }
+
+
+  Future<bool> _loadJioTv(Source source) async {
+    await JioSaavnPlayer.instance.pauseForVideo();
+    setState(() {
+      _cur = source;
+      _msg = 'Loading JioTV live stream…';
+      _showPickInMsg = false;
+      _ended = false;
+      _buffering = true;
+    });
+    await _disposeActiveVideoController();
+
+    final hint = (source.mimeTypeHint ?? source.url ?? '').toLowerCase();
+    final videoFormat = hint.contains('mpd') || hint.contains('dash')
+        ? bp.BetterPlayerVideoFormat.dash
+        : (hint.contains('m3u8') || hint.contains('hls')
+            ? bp.BetterPlayerVideoFormat.hls
+            : null);
+    final hasClearKey = (source.drmClearKey ?? '').isNotEmpty;
+    final drm = hasClearKey
+        ? bp.BetterPlayerDrmConfiguration(
+            drmType: bp.BetterPlayerDrmType.clearKey,
+            clearKey: source.drmClearKey,
+          )
+        : ((source.drmLicenseUrl ?? '').startsWith('http')
+            ? bp.BetterPlayerDrmConfiguration(
+                drmType: bp.BetterPlayerDrmType.widevine,
+                licenseUrl: source.drmLicenseUrl,
+                headers: source.headers,
+              )
+            : null);
+    final dataSource = bp.BetterPlayerDataSource.network(
+      source.url!,
+      headers: source.headers,
+      liveStream: true,
+      videoFormat: videoFormat,
+      drmConfiguration: drm,
+    );
+    final better = bp.BetterPlayerController(
+      const bp.BetterPlayerConfiguration(
+        autoPlay: false,
+        autoDispose: false,
+        handleLifecycle: true,
+        fit: BoxFit.contain,
+        controlsConfiguration: bp.BetterPlayerControlsConfiguration(
+          showControls: false,
+          showControlsOnInitialize: false,
+          enableOverflowMenu: false,
+          enablePip: false,
+        ),
+      ),
+    );
+    _jioBetterController = better;
+    try {
+      await better.setupDataSource(dataSource);
+      final controller = better.videoPlayerController;
+      if (!mounted || _jioBetterController != better || controller == null) {
+        better.dispose(forceDispose: true);
+        return false;
+      }
+      _player = controller;
+      final videoSize = controller.value.size;
+      await SystemChrome.setPreferredOrientations(
+        videoSize.width >= videoSize.height
+            ? const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
+            : const [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown],
+      );
+      _enterImmersive();
+      await controller.setLooping(false);
+      await controller.setPlaybackSpeed(_rate);
+      _transitioning = false;
+      controller.addListener(_onPlayerChanged);
+      setState(() {
+        _msg = null;
+        _buffering = false;
+      });
+      await controller.play();
+      if (mounted) setState(() {});
+      return true;
+    } catch (e) {
+      _failedSourceUrls.add(source.url!);
+      _transitioning = false;
+      better.dispose(forceDispose: true);
+      if (_jioBetterController == better) _jioBetterController = null;
+      _player = null;
+      if (!mounted) return false;
+      setState(() {
+        _msg = 'JioTV player error: $e';
         _showPickInMsg = true;
         _buffering = false;
       });
@@ -1006,8 +1153,13 @@ class _PlayerPageState extends State<PlayerPage> {
     _saveNow();
     app.progressRev.value++;
     _player?.removeListener(_onPlayerChanged);
+    final better = _jioBetterController;
+    _jioBetterController = null;
     final controller = _player;
-    if (controller != null) {
+    _player = null;
+    if (better != null) {
+      better.dispose(forceDispose: true);
+    } else if (controller != null) {
       unawaited(controller.dispose());
     }
     SystemChrome.setSystemUIChangeCallback(null);
@@ -1054,7 +1206,9 @@ class _PlayerPageState extends State<PlayerPage> {
                         child: SizedBox(
                           width: videoSize.width,
                           height: videoSize.height,
-                          child: VideoPlayer(_player!),
+                          child: _item.pid == 'jiotv' && _jioBetterController != null
+                              ? bp.BetterPlayer(controller: _jioBetterController!)
+                              : VideoPlayer(_player!),
                         ),
                       ),
                     );
@@ -1414,8 +1568,15 @@ class _PlayerPageState extends State<PlayerPage> {
         children: [
           if (_msg != null) ...[
             Text(_msg!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
-            if (_showPickInMsg) ...[
+            if (_showPickInMsg && _item.pid == 'jiotv') ...[
               const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: () => _setup(forceRefresh: true),
+                child: const Text('Retry Stream'),
+              ),
+            ],
+            if (_showPickInMsg && _srcs.isNotEmpty) ...[
+              const SizedBox(height: 8),
               OutlinedButton(onPressed: _pickSource, child: const Text('Choose source')),
             ],
           ],
