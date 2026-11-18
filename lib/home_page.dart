@@ -239,7 +239,6 @@ class _StoryTvGrid extends StatefulWidget {
 }
 
 class _StoryTvGridState extends State<_StoryTvGrid> {
-  late final List<Item> _allItems = [...widget.items];
   late final List<Item> _items = [...widget.items];
   int _page = 0;
   bool _hasMore = true;
