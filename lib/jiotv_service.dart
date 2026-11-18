@@ -498,15 +498,6 @@ class JioTvAdapter extends Adapter {
     return clean.replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
   }
 
-).hasMatch(clean)) {
-      final bytes = <int>[
-        for (var i = 0; i < 32; i += 2)
-          int.parse(clean.substring(i, i + 2), radix: 16),
-      ];
-      return base64Url.encode(bytes).replaceAll('=', '');
-    }
-    return clean.replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
-  }
 
   Map<String, String> _parseClearKeyPairs(Iterable<dynamic> values) {
     final pairs = <String, String>{};
