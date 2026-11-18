@@ -33,8 +33,12 @@ class _DetailPageState extends State<DetailPage> {
   void initState() {
     super.initState();
     if (widget.item.pid == 'jiotv') {
-      _programTicker = Timer.periodic(const Duration(seconds: 30), (_) {
-        if (mounted) setState(() {});
+      _programTicker = Timer.periodic(const Duration(seconds: 60), (_) {
+        if (mounted) {
+          setState(() {
+            _jioProgram = JioTvAdapter.currentProgram(widget.item.id);
+          });
+        }
       });
     }
   }
@@ -182,8 +186,17 @@ class _DetailPageState extends State<DetailPage> {
                                   future: _jioProgram,
                                   builder: (context, programSnap) {
                                     final program = programSnap.data;
+                                    if (programSnap.connectionState == ConnectionState.waiting) {
+                                      return const Padding(
+                                        padding: EdgeInsets.only(top: 4),
+                                        child: Text('Loading programme…', style: TextStyle(fontSize: 12)),
+                                      );
+                                    }
                                     if (program == null || program.title.isEmpty) {
-                                      return const SizedBox.shrink();
+                                      return const Padding(
+                                        padding: EdgeInsets.only(top: 4),
+                                        child: Text('Programme information unavailable', style: TextStyle(fontSize: 12)),
+                                      );
                                     }
                                     return Padding(
                                       padding: const EdgeInsets.only(top: 4),
@@ -289,9 +302,17 @@ class _DetailPageState extends State<DetailPage> {
                       future: _jioProgram,
                       builder: (context, programSnap) {
                         final program = programSnap.data;
-                        if (programSnap.connectionState != ConnectionState.done ||
-                            program == null) {
-                          return const SizedBox.shrink();
+                        if (programSnap.connectionState == ConnectionState.waiting) {
+                          return const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 8, 16, 14),
+                            child: LinearProgressIndicator(minHeight: 3),
+                          );
+                        }
+                        if (program == null) {
+                          return const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 8, 16, 14),
+                            child: Text('Programme information is not available for this channel right now.'),
+                          );
                         }
                         final description = program.description.trim();
                         final elapsed = DateTime.now().isBefore(program.start)
