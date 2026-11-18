@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
+import 'package:better_player_plus/better_player_plus.dart' as bp;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'models.dart';
@@ -28,6 +29,7 @@ class PlayerPage extends StatefulWidget {
 
 class _PlayerPageState extends State<PlayerPage> {
   dynamic _player;
+  bp.BetterPlayerController? _jioBetterController;
   late Item _item = widget.item;
 
   late Episode? _ep = widget.ep;
@@ -58,7 +60,6 @@ class _PlayerPageState extends State<PlayerPage> {
   IconData? _indicatorIcon;
   Timer? _gestureIndicatorTimer;
   static const MethodChannel _playerChannel = MethodChannel('app.stratus/player');
-  static const MethodChannel _jioDrmChannel = MethodChannel('app.moviefox/jiotv_exoplayer_drm');
   bool get _isLandscape =>
       MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height;
 
@@ -276,8 +277,14 @@ class _PlayerPageState extends State<PlayerPage> {
   Future<void> _disposeActiveVideoController() async {
     final old = _player;
     old?.removeListener(_onPlayerChanged);
+    final better = _jioBetterController;
+    _jioBetterController = null;
     _player = null;
-    if (old != null) await old.dispose();
+    if (better != null) {
+      better.dispose(forceDispose: true);
+    } else if (old != null) {
+      await old.dispose();
+    }
   }
 
   Future<bool> _load(Source s) async {
@@ -380,45 +387,58 @@ class _PlayerPageState extends State<PlayerPage> {
     });
     await _disposeActiveVideoController();
 
-    final scheme = (source.drmScheme ?? '').toLowerCase();
-    final hasClearKey = scheme == 'clearkey' &&
-        (source.drmClearKey ?? '').trim().isNotEmpty;
-    final hasWidevine = scheme == 'widevine' &&
-        (source.drmLicenseUrl ?? '').startsWith('http');
-
+    final hint = (source.mimeTypeHint ?? source.url ?? '').toLowerCase();
+    final videoFormat = hint.contains('mpd') || hint.contains('dash')
+        ? bp.BetterPlayerVideoFormat.dash
+        : (hint.contains('m3u8') || hint.contains('hls')
+            ? bp.BetterPlayerVideoFormat.hls
+            : null);
+    final hasClearKey = (source.drmClearKey ?? '').isNotEmpty;
+    final drm = hasClearKey
+        ? bp.BetterPlayerDrmConfiguration(
+            drmType: bp.BetterPlayerDrmType.clearKey,
+            clearKey: source.drmClearKey,
+          )
+        : ((source.drmLicenseUrl ?? '').startsWith('http')
+            ? bp.BetterPlayerDrmConfiguration(
+                drmType: bp.BetterPlayerDrmType.widevine,
+                licenseUrl: source.drmLicenseUrl,
+                headers: source.headers,
+              )
+            : null);
+    final dataSource = bp.BetterPlayerDataSource.network(
+      source.url!,
+      headers: source.headers,
+      liveStream: true,
+      videoFormat: videoFormat,
+      drmConfiguration: drm,
+    );
+    final better = bp.BetterPlayerController(
+      const bp.BetterPlayerConfiguration(
+        autoPlay: false,
+        autoDispose: false,
+        handleLifecycle: true,
+        fit: BoxFit.contain,
+        controlsConfiguration: bp.BetterPlayerControlsConfiguration(
+          showControls: false,
+          showControlsOnInitialize: false,
+          enableOverflowMenu: false,
+          enablePip: false,
+        ),
+      ),
+    );
+    _jioBetterController = better;
     try {
-      if (hasClearKey || hasWidevine) {
-        await _jioDrmChannel.invokeMethod<void>('setDrmConfig', {
-          'uri': source.url!,
-          'scheme': hasClearKey ? 'clearkey' : 'widevine',
-          'licenseUrl': source.drmLicenseUrl ?? '',
-          'clearKey': source.drmClearKey ?? '',
-          'headers': source.headers,
-        });
-      } else {
-        await _jioDrmChannel.invokeMethod<void>('clearDrmConfig', {
-          'uri': source.url!,
-        });
+      await better.setupDataSource(dataSource);
+      final controller = better.videoPlayerController;
+      if (!mounted || _jioBetterController != better || controller == null) {
+        better.dispose(forceDispose: true);
+        return false;
       }
-
-      final hint = (source.mimeTypeHint ?? source.url ?? '').toLowerCase();
-      final formatHint = hint.contains('mpd') || hint.contains('dash')
-          ? VideoFormat.dash
-          : (hint.contains('m3u8') || hint.contains('hls')
-              ? VideoFormat.hls
-              : null);
-      final controller = VideoPlayerController.networkUrl(
-        Uri.parse(source.url!),
-        httpHeaders: source.headers,
-        formatHint: formatHint,
-        videoPlayerOptions: VideoPlayerOptions(),
-      );
       _player = controller;
-      await controller.initialize();
-      if (!mounted || _player != controller) return false;
-
       final videoSize = controller.value.size;
-      final isLandscape = videoSize.width >= videoSize.height;
+      final isLandscape = videoSize != null &&
+          videoSize.width >= videoSize.height;
       await SystemChrome.setPreferredOrientations(
         isLandscape
             ? const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
@@ -426,7 +446,7 @@ class _PlayerPageState extends State<PlayerPage> {
       );
       _enterImmersive();
       await controller.setLooping(false);
-      await controller.setPlaybackSpeed(_rate);
+      await better.setSpeed(_rate);
       _transitioning = false;
       controller.addListener(_onPlayerChanged);
       setState(() {
@@ -439,10 +459,12 @@ class _PlayerPageState extends State<PlayerPage> {
     } catch (e) {
       _failedSourceUrls.add(source.url!);
       _transitioning = false;
+      better.dispose(forceDispose: true);
+      if (_jioBetterController == better) _jioBetterController = null;
       _player = null;
       if (!mounted) return false;
       setState(() {
-        _msg = 'JioTV ExoPlayer error: $e';
+        _msg = 'JioTV player error: $e';
         _showPickInMsg = true;
         _buffering = false;
       });
