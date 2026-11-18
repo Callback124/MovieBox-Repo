@@ -26,7 +26,7 @@ class JioTvProgram {
     final total = end.difference(start).inMilliseconds;
     if (total <= 0) return 0;
     final elapsed = DateTime.now().difference(start).inMilliseconds;
-    return (elapsed / total).clamp(0.0, 1.0);
+    return (elapsed / total).clamp(0.0, 1.0).toDouble();
   }
 
   String get timeLabel =>
