@@ -803,6 +803,24 @@ class JioTvEpgService {
     return pairs;
   }
 
+  String _canonicalHeaderName(String name) {
+    switch (name.toLowerCase()) {
+      case 'user-agent':
+        return 'User-Agent';
+      case 'cookie':
+        return 'Cookie';
+      case 'referer':
+      case 'referrer':
+        return 'Referer';
+      case 'origin':
+        return 'Origin';
+      case 'accept':
+        return 'Accept';
+      default:
+        return name;
+    }
+  }
+
   Source? _candidateFromMaps(List<Map> maps, {required String name, bool worker = false}) {
     if (maps.isEmpty) return null;
     if (worker) {
@@ -849,7 +867,8 @@ class JioTvEpgService {
         if (supplied is Map) {
           for (final entry in supplied.entries) {
             if (entry.value != null) {
-              headers[entry.key.toString()] = entry.value.toString();
+              headers[_canonicalHeaderName(entry.key.toString())] =
+                  entry.value.toString();
             }
           }
         }
@@ -950,7 +969,6 @@ class JioTvEpgService {
     try {
       final request = http.Request('GET', Uri.parse(source.url!));
       request.headers.addAll(source.headers);
-      request.headers.putIfAbsent('Range', () => 'bytes=0-2047');
       final response = await _client.send(request)
           .timeout(const Duration(seconds: 12));
       final subscription = response.stream.listen((_) {});
@@ -990,7 +1008,8 @@ class JioTvEpgService {
         !candidates.any((source) => source.url == fallback.url)) {
       candidates.add(fallback);
     }
-    if (candidates.isEmpty && item.sources.isNotEmpty) {
+    if (item.sources.isNotEmpty &&
+        !candidates.any((source) => source.url == item.sources.first.url)) {
       candidates.add(item.sources.first);
     }
 
