@@ -995,19 +995,29 @@ class JioTvEpgService {
     }
 
     final valid = <Source>[];
+    int? lastFailureStatus;
     for (final candidate in candidates) {
       final status = await _probeManifest(candidate);
       if (status == null || status == 200 || status == 206 ||
           (status >= 300 && status < 400)) {
         valid.add(candidate);
+      } else if (status >= 400) {
+        if (status == 451 || lastFailureStatus == null) {
+          lastFailureStatus = status;
+        }
       }
       // 403 / 410 / 451 and other HTTP errors are rejected so the next
       // candidate (npoint) is tried before handing anything to ExoPlayer.
     }
     if (valid.isEmpty) {
-      throw ProviderError(
-        'JioTV stream is unavailable. Check the Indian network and retry for a fresh stream token.',
-      );
+      final message = lastFailureStatus == 451
+          ? 'HTTP 451: JioTV CDN blocked this stream. An Indian IP/network may be required.'
+          : (lastFailureStatus == 403 || lastFailureStatus == 410
+              ? 'HTTP $lastFailureStatus: JioTV stream token expired or was rejected. Retry to fetch a fresh Worker token.'
+              : (lastFailureStatus == 404
+                  ? 'HTTP 404: this JioTV channel manifest is currently unavailable.'
+                  : 'JioTV stream is unavailable. Check the Indian network and retry for a fresh stream token.'));
+      throw ProviderError(message);
     }
     return valid;
   }
