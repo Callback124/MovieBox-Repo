@@ -7,6 +7,7 @@ import 'player_page.dart';
 import 'providers.dart';
 import 'store.dart';
 import 'widgets.dart';
+import 'jiotv_detail_page.dart';
 
 class DetailPage extends StatefulWidget {
   const DetailPage({super.key, required this.item});
@@ -64,6 +65,7 @@ class _DetailPageState extends State<DetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.item.pid == 'jiotv') return JioTvDetailPage(item: widget.item);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Scaffold(
