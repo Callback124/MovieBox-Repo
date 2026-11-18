@@ -22,9 +22,10 @@ class AppState extends ChangeNotifier {
   Future<void> init() async {
     _sp = await SharedPreferences.getInstance();
     providers = _readList('providers').map(ProviderDef.fromJson).toList();
-    // Remove the retired Internet Archive provider and persist the migration.
-    final hadArchive = providers.any((p) => p.id == 'archive' || p.kind == 'archive');
-    providers = providers.where((p) => p.id != 'archive' && p.kind != 'archive').toList();
+    // Remove retired providers from saved settings during migration.
+    providers = providers.where((p) =>
+        p.id != 'archive' && p.kind != 'archive' &&
+        p.id != 'jiotv' && p.kind != 'jiotv').toList();
     if (!providers.any((p) => p.id == 'storytv')) {
       providers.add(ProviderDef.storyTv());
     }
@@ -34,11 +35,9 @@ class AppState extends ChangeNotifier {
     if (!providers.any((p) => p.id == 'freereels')) {
       providers.add(ProviderDef.freeReels());
     }
-    if (!providers.any((p) => p.id == 'jiotv')) {
-      providers.add(ProviderDef.jioTv());
-    }
     _saveProviders();
-    library = _readList('library').map(Item.fromJson).toList();
+    library = _readList('library').map(Item.fromJson)
+        .where((item) => item.pid != 'jiotv').toList();
     progress = {};
     final raw = _sp.getString('progress');
     if (raw != null) {
