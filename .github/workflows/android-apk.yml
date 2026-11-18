@@ -349,174 +349,40 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
-      - name: Add JioTV DRM support to the native ExoPlayer pipeline
+      - name: Enable multi-session DRM for JioTV multi-key streams
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
-          root = Path.home() / '.pub-cache' / 'hosted' / 'pub.dev' / 'video_player_android-*'
-          plugin_dirs = list((Path.home() / '.pub-cache' / 'hosted' / 'pub.dev').glob('video_player_android-*'))
-          if not plugin_dirs:
-              raise SystemExit('video_player_android source was not found after flutter pub get')
-          plugin = plugin_dirs[-1] / 'android/src/main/java/io/flutter/plugins/videoplayer'
-          plugin_file = plugin / 'VideoPlayerPlugin.java'
-          asset_file = plugin / 'VideoAsset.java'
-          http_asset_file = plugin / 'HttpVideoAsset.java'
-          for path in (plugin_file, asset_file, http_asset_file):
-              if not path.exists():
-                  raise SystemExit(f'Missing expected ExoPlayer source: {path}')
+          root = Path.home() / '.pub-cache' / 'hosted' / 'pub.dev'
+          candidates = list(root.glob('better_player_plus-*/android/src/main/kotlin/**/BetterPlayer.kt'))
+          if not candidates:
+              raise SystemExit('Could not find BetterPlayer Plus Android ExoPlayer source')
 
-          source = plugin_file.read_text()
-          if 'app.moviefox/jiotv_exoplayer_drm' not in source:
-              source = source.replace(
-                  'import io.flutter.plugin.common.BinaryMessenger;',
-                  'import io.flutter.plugin.common.BinaryMessenger;\n'
-                  'import io.flutter.plugin.common.MethodChannel;'
+          patched = 0
+          for path in candidates:
+              source = path.read_text()
+              source = source.replace('.setMultiSession(false)', '.setMultiSession(true)')
+              pattern = r'(\.setUuidAndExoMediaDrmProvider\(\s*C\.CLEARKEY_UUID,[\s\S]*?\))\.build\(LocalMediaDrmCallback\(clearKey\.toByteArray\(\)\)\)'
+              source, count = re.subn(
+                  pattern,
+                  r'\1.setMultiSession(true).build(LocalMediaDrmCallback(clearKey.toByteArray()))',
+                  source,
+                  count=1,
               )
-              anchor = '    flutterState.startListening(this, binding.getBinaryMessenger());'
-              if anchor not in source:
-                  raise SystemExit('Could not locate VideoPlayerPlugin engine attach point')
-              source = source.replace(anchor, anchor + '''
-              new MethodChannel(binding.getBinaryMessenger(), "app.moviefox/jiotv_exoplayer_drm")
-                  .setMethodCallHandler((call, result) -> {
-                    if ("setDrmConfig".equals(call.method) && call.arguments instanceof java.util.Map) {
-                      HttpVideoAsset.setPendingDrmConfig((java.util.Map<?, ?>) call.arguments);
-                      result.success(null);
-                    } else if ("clearDrmConfig".equals(call.method) && call.arguments instanceof java.util.Map) {
-                      Object uri = ((java.util.Map<?, ?>) call.arguments).get("uri");
-                      if (uri != null) HttpVideoAsset.clearPendingDrmConfig(uri.toString());
-                      result.success(null);
-                    } else {
-                      result.notImplemented();
-                    }
-                  });
-          ''')
-              plugin_file.write_text(source)
+              if count == 0 and '.setMultiSession(true)' not in source:
+                  raise SystemExit(f'Could not enable ClearKey multi-session in {path}')
+              if '.setMultiSession(true)' not in source:
+                  raise SystemExit(f'Widevine multi-session was not enabled in {path}')
+              if 'LocalMediaDrmCallback(clearKey.toByteArray())' in source and 'setMultiSession(true).build(LocalMediaDrmCallback' not in source:
+                  raise SystemExit(f'ClearKey multi-session patch was not applied in {path}')
+              path.write_text(source)
+              patched += 1
 
-          source = asset_file.read_text()
-          old = 'return new HttpVideoAsset(remoteUrl, streamingFormat, new HashMap<>(httpHeaders), userAgent);'
-          new = 'return new HttpVideoAsset(remoteUrl, streamingFormat, new HashMap<>(httpHeaders), userAgent, HttpVideoAsset.takePendingDrmConfig(remoteUrl));'
-          if old in source:
-              source = source.replace(old, new)
-              asset_file.write_text(source)
-          elif new not in source:
-              raise SystemExit('Could not connect JioTV DRM config to video asset creation')
-
-          source = http_asset_file.read_text()
-          if 'setPendingDrmConfig' not in source:
-              source = source.replace(
-                  'import android.content.Context;',
-                  'import android.content.Context;\n'
-                  'import android.net.Uri;'
-              )
-              source = source.replace(
-                  'import androidx.media3.common.MediaItem;',
-                  'import androidx.media3.common.MediaItem;\n'
-                  'import androidx.media3.common.C;\n'
-                  'import androidx.media3.exoplayer.drm.DefaultDrmSessionManager;\n'
-                  'import androidx.media3.exoplayer.drm.FrameworkMediaDrm;\n'
-                  'import androidx.media3.exoplayer.drm.LocalMediaDrmCallback;'
-              )
-              source = source.replace(
-                  'import java.util.Map;',
-                  'import java.util.Map;\n'
-                  'import java.util.HashMap;\n'
-                  'import java.util.concurrent.ConcurrentHashMap;\n'
-                  'import java.nio.charset.StandardCharsets;'
-              )
-              source = source.replace(
-                  '  @NonNull private final StreamingFormat streamingFormat;',
-                  '''  private static final Map<String, Map<String, Object>> PENDING_DRM = new ConcurrentHashMap<>();
-
-          static void setPendingDrmConfig(Map<?, ?> config) {
-            Object uri = config.get("uri");
-            if (uri == null) return;
-            Map<String, Object> copy = new HashMap<>();
-            for (Map.Entry<?, ?> entry : config.entrySet()) {
-              if (entry.getKey() != null) copy.put(entry.getKey().toString(), entry.getValue());
-            }
-            PENDING_DRM.put(uri.toString(), copy);
-          }
-
-          static void clearPendingDrmConfig(String uri) { PENDING_DRM.remove(uri); }
-          static Map<String, Object> takePendingDrmConfig(String uri) { return PENDING_DRM.remove(uri); }
-
-          @Nullable private final Map<String, Object> drmConfig;
-          @NonNull private final StreamingFormat streamingFormat;'''
-              )
-              source = source.replace(
-                  '      @Nullable String userAgent) {',
-                  '      @Nullable String userAgent, @Nullable Map<String, Object> drmConfig) {'
-              )
-              source = source.replace(
-                  '    this.userAgent = userAgent;',
-                  '    this.userAgent = userAgent;\n    this.drmConfig = drmConfig;'
-              )
-              source = source.replace(
-                  '    return builder.build();',
-                  '''    if (drmConfig != null && "widevine".equalsIgnoreCase(String.valueOf(drmConfig.get("scheme")))) {
-                String licenseUrl = String.valueOf(drmConfig.get("licenseUrl"));
-                if (licenseUrl.startsWith("http")) {
-                  Map<String, String> licenseHeaders = stringHeaders(drmConfig.get("headers"));
-                  builder.setDrmConfiguration(
-                      new MediaItem.DrmConfiguration.Builder(C.WIDEVINE_UUID)
-                          .setLicenseUri(Uri.parse(licenseUrl))
-                          .setMultiSession(true)
-                          .setLicenseRequestHeaders(licenseHeaders)
-                          .build());
-                }
-              }
-              } else if (drmConfig != null && "clearkey".equalsIgnoreCase(String.valueOf(drmConfig.get("scheme")))) {
-                builder.setDrmConfiguration(
-                    new MediaItem.DrmConfiguration.Builder(C.CLEARKEY_UUID)
-                        .setMultiSession(true)
-                        .build());
-              }
-              return builder.build();''',
-                  1
-              )
-              source = source.replace(
-                  '    return new DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory);',
-                  '''    DefaultMediaSourceFactory mediaSourceFactory =
-                new DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory);
-            if (drmConfig != null && "clearkey".equalsIgnoreCase(String.valueOf(drmConfig.get("scheme")))) {
-              String clearKey = String.valueOf(drmConfig.get("clearKey"));
-              if (clearKey.isEmpty() || "null".equals(clearKey)) {
-                throw new IllegalArgumentException("JioTV ClearKey data is missing");
-              }
-              DefaultDrmSessionManager drmManager =
-                  new DefaultDrmSessionManager.Builder()
-                      .setUuidAndExoMediaDrmProvider(C.CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
-                      .setMultiSession(true)
-                      .build(new LocalMediaDrmCallback(clearKey.getBytes(StandardCharsets.UTF_8)));
-              mediaSourceFactory.setDrmSessionManagerProvider(mediaItem -> drmManager);
-            }
-            return mediaSourceFactory;'''
-              )
-              source = source.replace(
-                  '  @NonNull\\n  @Override\\n  public MediaSource.Factory getMediaSourceFactory(@NonNull Context context) {',
-                  '  @OptIn(markerClass = UnstableApi.class)\\n  @NonNull\\n  @Override\\n  public MediaSource.Factory getMediaSourceFactory(@NonNull Context context) {'
-              )
-              marker = '  // TODO: Migrate to stable API, see https://github.com/flutter/flutter/issues/147039.'
-              helper = '''  private static Map<String, String> stringHeaders(Object raw) {
-            Map<String, String> result = new HashMap<>();
-            if (raw instanceof Map) {
-              for (Map.Entry<?, ?> entry : ((Map<?, ?>) raw).entrySet()) {
-                if (entry.getKey() != null && entry.getValue() != null) {
-                  result.put(entry.getKey().toString(), entry.getValue().toString());
-                }
-              }
-            }
-            return result;
-          }
-
-          '''
-              source = source.replace(marker, helper + marker, 1)
-              http_asset_file.write_text(source)
-          else:
-              print('JioTV DRM support already present in video_player_android')
-
-          print('Installed JioTV ClearKey/Widevine support in Flutter video_player ExoPlayer')
+          if patched == 0:
+              raise SystemExit('No BetterPlayer Plus Android source was patched')
+          print(f'Enabled multi-session DRM in {patched} BetterPlayer Plus Android source file(s)')
           PY
 
       - name: Generate Android launcher icons
