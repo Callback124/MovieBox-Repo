@@ -5,6 +5,40 @@ import 'package:http/http.dart' as http;
 
 import 'models.dart';
 
+
+/// Current/now-playing programme returned by JioTV's EPG endpoint.
+class JioTvProgram {
+  const JioTvProgram({
+    required this.title,
+    required this.description,
+    required this.start,
+    required this.end,
+    this.poster,
+  });
+
+  final String title;
+  final String description;
+  final DateTime start;
+  final DateTime end;
+  final String? poster;
+
+  double get progress {
+    final total = end.difference(start).inMilliseconds;
+    if (total <= 0) return 0;
+    final elapsed = DateTime.now().difference(start).inMilliseconds;
+    return (elapsed / total).clamp(0.0, 1.0);
+  }
+
+  String get timeLabel =>
+      '${_clock(start)} - ${_clock(end)}';
+
+  static String _clock(DateTime value) {
+    final h = value.hour % 12 == 0 ? 12 : value.hour % 12;
+    final m = value.minute.toString().padLeft(2, '0');
+    return '$h:$m ${value.hour >= 12 ? 'PM' : 'AM'}';
+  }
+}
+
 /// JioTV live-channel catalog. The two catalog endpoints are fetched in parallel;
 /// the npoint feed enriches the official list with logos, categories and stream URLs.
 class JioTvAdapter extends Adapter {
@@ -336,6 +370,63 @@ class JioTvAdapter extends Adapter {
       sources: sources,
       corner: category,
     );
+  }
+
+
+  static final Map<String, ({DateTime savedAt, JioTvProgram? program})> _epgCache = {};
+
+  /// Fetch today's EPG and return the programme that is on air right now.
+  static Future<JioTvProgram?> currentProgram(String channelId) async {
+    final cached = _epgCache[channelId];
+    if (cached != null &&
+        DateTime.now().difference(cached.savedAt) < const Duration(minutes: 5)) {
+      return cached.program;
+    }
+
+    final uri = Uri.https(
+      'jiotv.data.cdn.jio.com',
+      '/apis/v1.3/getepg/get',
+      {'offset': '0', 'channel_id': channelId},
+    );
+    final response = await _client.get(uri, headers: _apiHeaders)
+        .timeout(const Duration(seconds: 18));
+    if (response.statusCode != 200) {
+      throw ProviderError('JioTV programme guide HTTP ${response.statusCode}');
+    }
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    final rows = decoded is Map && decoded['epg'] is List
+        ? decoded['epg'] as List
+        : const <dynamic>[];
+    final now = DateTime.now();
+    JioTvProgram? current;
+    for (final row in rows.whereType<Map>()) {
+      final startRaw = num.tryParse(row['startEpoch']?.toString() ?? '');
+      final endRaw = num.tryParse(row['endEpoch']?.toString() ?? '');
+      if (startRaw == null || endRaw == null) continue;
+      final startMs = startRaw < 1000000000000 ? startRaw * 1000 : startRaw;
+      final endMs = endRaw < 1000000000000 ? endRaw * 1000 : endRaw;
+      final start = DateTime.fromMillisecondsSinceEpoch(startMs.toInt());
+      final end = DateTime.fromMillisecondsSinceEpoch(endMs.toInt());
+      if (now.isBefore(start) || !now.isBefore(end)) continue;
+
+      String? image = row['episodePoster']?.toString().trim();
+      if (image == null || image.isEmpty || image.toLowerCase() == 'null') {
+        image = row['episodeThumbnail']?.toString().trim();
+      }
+      if (image != null && image.isNotEmpty && !isHttp(image)) {
+        image = 'https://jiotv.catchup.cdn.jio.com/dare_images/shows/${image.replaceFirst(RegExp(r'^/+'), '')}';
+      }
+      current = JioTvProgram(
+        title: (row['showname'] ?? '').toString().trim(),
+        description: (row['description'] ?? '').toString().trim(),
+        start: start,
+        end: end,
+        poster: image,
+      );
+      break;
+    }
+    _epgCache[channelId] = (savedAt: DateTime.now(), program: current);
+    return current;
   }
 
   Future<List<Item>> _loadChannels() async {
