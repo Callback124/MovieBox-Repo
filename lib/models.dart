@@ -278,9 +278,6 @@ class ProviderDef {
   factory ProviderDef.freeReels() => const ProviderDef(
       id: 'freereels', kind: 'freereels', name: 'Free Reels', builtin: true);
 
-  factory ProviderDef.jioTv() => const ProviderDef(
-      id: 'jiotv', kind: 'jiotv', name: 'JioTV', builtin: true);
-
   ProviderDef copyWith({bool? enabled}) => ProviderDef(
         id: id,
         kind: kind,
@@ -293,7 +290,7 @@ class ProviderDef {
       );
 
   String get kindLabel => switch (kind) {
-        'moviebox' || 'storytv' || 'freereels' || 'jiotv' => 'Built-in',
+        'moviebox' || 'storytv' || 'freereels' => 'Built-in',
         'stremio' => 'Stremio addon',
         'json' => 'JSON catalog',
         _ => kind,
