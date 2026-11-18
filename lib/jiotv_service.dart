@@ -375,7 +375,8 @@ class JioTvAdapter extends Adapter {
 
   static final Map<String, ({DateTime savedAt, JioTvProgram? program})> _epgCache = {};
 
-  /// Fetch today's EPG and return the programme that is on air right now.
+  /// Fetch the current programme using JioTV's official EPG endpoint.
+  /// JioTV returns epoch values in milliseconds and may split listings by offset.
   static Future<JioTvProgram?> currentProgram(String channelId) async {
     final cached = _epgCache[channelId];
     if (cached != null &&
@@ -383,50 +384,84 @@ class JioTvAdapter extends Adapter {
       return cached.program;
     }
 
-    final uri = Uri.https(
-      'jiotv.data.cdn.jio.com',
-      '/apis/v1.3/getepg/get',
-      {'offset': '0', 'channel_id': channelId},
-    );
-    final response = await _client.get(uri, headers: _apiHeaders)
-        .timeout(const Duration(seconds: 18));
-    if (response.statusCode != 200) {
-      throw ProviderError('JioTV programme guide HTTP ${response.statusCode}');
-    }
-    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-    final rows = decoded is Map && decoded['epg'] is List
-        ? decoded['epg'] as List
-        : const <dynamic>[];
+    final headers = <String, String>{
+      ..._apiHeaders,
+      'User-Agent': 'okhttp/4.2.2',
+    };
     final now = DateTime.now();
     JioTvProgram? current;
-    for (final row in rows.whereType<Map>()) {
-      final startRaw = num.tryParse(row['startEpoch']?.toString() ?? '');
-      final endRaw = num.tryParse(row['endEpoch']?.toString() ?? '');
-      if (startRaw == null || endRaw == null) continue;
-      final startMs = startRaw < 1000000000000 ? startRaw * 1000 : startRaw;
-      final endMs = endRaw < 1000000000000 ? endRaw * 1000 : endRaw;
-      final start = DateTime.fromMillisecondsSinceEpoch(startMs.toInt());
-      final end = DateTime.fromMillisecondsSinceEpoch(endMs.toInt());
-      if (now.isBefore(start) || !now.isBefore(end)) continue;
+    JioTvProgram? next;
 
-      String? image = row['episodePoster']?.toString().trim();
-      if (image == null || image.isEmpty || image.toLowerCase() == 'null') {
-        image = row['episodeThumbnail']?.toString().trim();
-      }
-      if (image != null && image.isNotEmpty && !isHttp(image)) {
-        image = 'https://jiotv.catchup.cdn.jio.com/dare_images/shows/${image.replaceFirst(RegExp(r'^/+'), '')}';
-      }
-      current = JioTvProgram(
-        title: (row['showname'] ?? '').toString().trim(),
-        description: (row['description'] ?? '').toString().trim(),
-        start: start,
-        end: end,
-        poster: image,
+    for (final offset in [0, 1]) {
+      final uri = Uri.https(
+        'jiotv.data.cdn.jio.com',
+        '/apis/v1.3/getepg/get/',
+        {'offset': '$offset', 'channel_id': channelId},
       );
-      break;
+      final response = await _client.get(uri, headers: headers)
+          .timeout(const Duration(seconds: 18));
+      if (response.statusCode != 200) {
+        if (offset == 0) {
+          throw ProviderError('JioTV programme guide HTTP ${response.statusCode}');
+        }
+        continue;
+      }
+
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      final rows = decoded is Map && decoded['epg'] is List
+          ? decoded['epg'] as List
+          : decoded is List
+              ? decoded
+              : const <dynamic>[];
+
+      for (final row in rows.whereType<Map>()) {
+        final startRaw = num.tryParse(
+          (row['startEpoch'] ?? row['start_epoch'] ?? '').toString(),
+        );
+        final endRaw = num.tryParse(
+          (row['endEpoch'] ?? row['end_epoch'] ?? '').toString(),
+        );
+        if (startRaw == null || endRaw == null) continue;
+
+        // JioTV EPG startEpoch/endEpoch are Unix milliseconds.
+        final startMs = startRaw < 1000000000000 ? startRaw * 1000 : startRaw;
+        final endMs = endRaw < 1000000000000 ? endRaw * 1000 : endRaw;
+        final start = DateTime.fromMillisecondsSinceEpoch(startMs.toInt());
+        final end = DateTime.fromMillisecondsSinceEpoch(endMs.toInt());
+        if (!end.isAfter(start)) continue;
+
+        String? image = (row['episodePoster'] ?? row['episodeThumbnail'])
+            ?.toString().trim();
+        if (image != null && image.isNotEmpty &&
+            image.toLowerCase() != 'null' && !isHttp(image)) {
+          image = 'https://jiotv.catchup.cdn.jio.com/dare_images/shows/${image.replaceFirst(RegExp(r'^/+'), '')}';
+        }
+        final title = (row['showname'] ?? row['title'] ?? '').toString().trim();
+        if (title.isEmpty) continue;
+
+        final program = JioTvProgram(
+          title: title,
+          description: (row['description'] ?? '').toString().trim(),
+          start: start,
+          end: end,
+          poster: image,
+        );
+        if (!now.isBefore(start) && now.isBefore(end)) {
+          current = program;
+          break;
+        }
+        if (start.isAfter(now) && (next == null || start.isBefore(next.start))) {
+          next = program;
+        }
+      }
+      if (current != null) break;
     }
-    _epgCache[channelId] = (savedAt: DateTime.now(), program: current);
-    return current;
+
+    // If JioTV's current slot is missing, at least show its next scheduled slot
+    // rather than rendering an entirely blank programme section.
+    final result = current ?? next;
+    _epgCache[channelId] = (savedAt: DateTime.now(), program: result);
+    return result;
   }
 
   Future<List<Item>> _loadChannels() async {
