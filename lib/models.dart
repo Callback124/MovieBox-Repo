@@ -211,6 +211,13 @@ class Shelf {
   final String? genreTopId;
 }
 
+abstract class Adapter {
+  Future<List<Shelf>> home(ProviderDef p);
+  Future<List<Item>> search(ProviderDef p, String q);
+  Future<Item> detail(ProviderDef p, Item item);
+  Future<List<Source>> sources(ProviderDef p, Item item, Episode? ep);
+}
+
 class DubOption {
   const DubOption({required this.subjectId, required this.language, required this.detailPath, this.original = false});
   final String subjectId;

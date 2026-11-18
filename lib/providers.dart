@@ -88,13 +88,6 @@ Future<List<Shelf>> shelvesFrom(
 
 /* ---------- adapter contract ---------- */
 
-abstract class Adapter {
-  Future<List<Shelf>> home(ProviderDef p);
-  Future<List<Item>> search(ProviderDef p, String q);
-  Future<Item> detail(ProviderDef p, Item item);
-  Future<List<Source>> sources(ProviderDef p, Item item, Episode? ep);
-}
-
 Adapter adapterFor(ProviderDef p) => switch (p.kind) {
       'storytv' => StoryTvAdapter(),
       'freereels' => FreeReelsAdapter(),
