@@ -61,10 +61,13 @@ class _JioTvDetailPageState extends State<JioTvDetailPage> {
 
   Future<void> _loadTomorrow(int generation) async {
     try {
-      final tomorrow = await JioTvEpgService.loadDay(widget.item.id, 1);
+      final days = await Future.wait<List<JioTvProgram>>([
+        JioTvEpgService.loadDay(widget.item.id, 1).catchError((_) => <JioTvProgram>[]),
+        JioTvEpgService.loadDay(widget.item.id, 2).catchError((_) => <JioTvProgram>[]),
+      ]);
       if (!mounted || generation != _loadGeneration) return;
       setState(() {
-        _tomorrowPrograms = tomorrow;
+        _tomorrowPrograms = days.expand((day) => day).toList();
         _loadingTomorrow = false;
       });
     } catch (_) {
