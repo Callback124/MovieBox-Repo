@@ -437,14 +437,16 @@ class _PlayerPageState extends State<PlayerPage> {
       }
       _player = controller;
       final videoSize = controller.value.size;
+      final isLandscape = videoSize != null &&
+          videoSize.width >= videoSize.height;
       await SystemChrome.setPreferredOrientations(
-        videoSize.width >= videoSize.height
+        isLandscape
             ? const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
             : const [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown],
       );
       _enterImmersive();
       await controller.setLooping(false);
-      await controller.setPlaybackSpeed(_rate);
+      await better.setSpeed(_rate);
       _transitioning = false;
       controller.addListener(_onPlayerChanged);
       setState(() {
