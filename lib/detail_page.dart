@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -7,6 +9,7 @@ import 'player_page.dart';
 import 'providers.dart';
 import 'store.dart';
 import 'widgets.dart';
+import 'jiotv_service.dart';
 
 class DetailPage extends StatefulWidget {
   const DetailPage({super.key, required this.item});
@@ -21,6 +24,26 @@ class _DetailPageState extends State<DetailPage> {
   int? _season;
   int _rangeStart = 0;
   late Item _sourceItem = widget.item;
+  late Future<JioTvProgram?> _jioProgram = widget.item.pid == 'jiotv'
+      ? JioTvAdapter.currentProgram(widget.item.id)
+      : Future.value(null);
+  Timer? _programTicker;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.item.pid == 'jiotv') {
+      _programTicker = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _programTicker?.cancel();
+    super.dispose();
+  }
 
   void _selectDub(DubOption dub) {
     setState(() {
@@ -75,6 +98,7 @@ class _DetailPageState extends State<DetailPage> {
           final err = snap.error;
           final eps = d.episodes;
           final isStoryTv = d.pid == 'storytv' || d.pid == 'freereels';
+          final isJioTv = d.pid == 'jiotv';
           final seasons = (eps.map((e) => e.season).toSet().toList()..sort());
           if (eps.isNotEmpty) _season ??= (_lastEp(d) ?? eps.first).season;
           final list = eps.where((e) => e.season == _season).toList();
@@ -100,7 +124,24 @@ class _DetailPageState extends State<DetailPage> {
                     background: Stack(
                       fit: StackFit.expand,
                       children: [
-                        if (isHttp(d.bg ?? d.poster))
+                        if (isJioTv)
+                          FutureBuilder<JioTvProgram?>(
+                            future: _jioProgram,
+                            builder: (context, programSnap) {
+                              final image = programSnap.data?.poster;
+                              final fallback = d.bg ?? d.poster;
+                              final url = isHttp(image) ? image : fallback;
+                              if (!isHttp(url)) return const SizedBox.shrink();
+                              return CachedNetworkImage(
+                                cacheManager: AppImageCache.instance,
+                                imageUrl: url!,
+                                fit: BoxFit.cover,
+                                memCacheWidth: 800,
+                                errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                              );
+                            },
+                          )
+                        else if (isHttp(d.bg ?? d.poster))
                           CachedNetworkImage(
                             cacheManager: AppImageCache.instance,
                             imageUrl: (d.bg ?? d.poster)!,
@@ -136,6 +177,27 @@ class _DetailPageState extends State<DetailPage> {
                             children: [
                               Text(d.title,
                                   style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+                              if (isJioTv)
+                                FutureBuilder<JioTvProgram?>(
+                                  future: _jioProgram,
+                                  builder: (context, programSnap) {
+                                    final program = programSnap.data;
+                                    if (program == null || program.title.isEmpty) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(program.title,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: tt.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: cs.primary,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
                               const SizedBox(height: 8),
                               Wrap(spacing: 6, runSpacing: 6, children: [
                                 for (final t in tags)
@@ -194,18 +256,19 @@ class _DetailPageState extends State<DetailPage> {
                                 d, eps.isEmpty ? null : (_lastEp(d) ?? eps.first)),
                         child: Text(loading ? 'Loading…' : 'Watch'),
                       ),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      if (!isJioTv)
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: loading || err != null
+                              ? null
+                              : () => Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) => DownloadPage(item: d),
+                                  )),
+                          icon: const Icon(Icons.download_outlined, size: 18),
+                          label: const Text('Download'),
                         ),
-                        onPressed: loading || err != null
-                            ? null
-                            : () => Navigator.of(context).push(MaterialPageRoute(
-                                  builder: (_) => DownloadPage(item: d),
-                                )),
-                        icon: const Icon(Icons.download_outlined, size: 18),
-                        label: const Text('Download'),
-                      ),
                     ]),
                   ),
                 ),
@@ -220,7 +283,58 @@ class _DetailPageState extends State<DetailPage> {
                       ),
                     ),
                   ),
-                if ((d.plot ?? '').isNotEmpty)
+                if (isJioTv)
+                  SliverToBoxAdapter(
+                    child: FutureBuilder<JioTvProgram?>(
+                      future: _jioProgram,
+                      builder: (context, programSnap) {
+                        final program = programSnap.data;
+                        if (programSnap.connectionState != ConnectionState.done ||
+                            program == null) {
+                          return const SizedBox.shrink();
+                        }
+                        final description = program.description.trim();
+                        final elapsed = DateTime.now().isBefore(program.start)
+                            ? Duration.zero
+                            : DateTime.now().difference(program.start);
+                        final remaining = program.end.difference(DateTime.now());
+                        String duration(Duration value) {
+                          final minutes = value.inMinutes.abs();
+                          return '${minutes ~/ 60}h ${(minutes % 60).toString().padLeft(2, '0')}m';
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (description.isNotEmpty)
+                                Text(description, style: const TextStyle(height: 1.5)),
+                              const SizedBox(height: 10),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(program.timeLabel,
+                                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                                  Text('${duration(elapsed)} elapsed · ${duration(remaining)} left',
+                                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                                ],
+                              ),
+                              const SizedBox(height: 7),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(99),
+                                child: LinearProgressIndicator(
+                                  value: program.progress,
+                                  minHeight: 6,
+                                  backgroundColor: cs.surfaceContainerHighest,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                if (!isJioTv && (d.plot ?? '').isNotEmpty)
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
