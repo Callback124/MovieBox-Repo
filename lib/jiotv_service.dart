@@ -14,31 +14,13 @@ class JioTvProgram {
     required this.start,
     required this.end,
     this.poster,
-    this.thumbnail,
-    this.category = 'TV Show',
-    this.genre = '',
-    this.cast = '',
-    this.director = '',
-    this.id = '',
   });
 
-  final String id;
   final String title;
   final String description;
   final DateTime start;
   final DateTime end;
   final String? poster;
-  final String? thumbnail;
-  final String category;
-  final String genre;
-  final String cast;
-  final String director;
-
-  String get status {
-    final now = DateTime.now();
-    if (!now.isBefore(start) && now.isBefore(end)) return 'LIVE';
-    return end.isBefore(now) || end.isAtSameMomentAs(now) ? 'CATCH-UP' : 'UPCOMING';
-  }
 
   double get progress {
     final total = end.difference(start).inMilliseconds;
@@ -391,147 +373,95 @@ class JioTvAdapter extends Adapter {
   }
 
 
-  static final Map<String, ({DateTime savedAt, List<JioTvProgram> programs})> _epgCache = {};
-  static final Map<String, Future<List<JioTvProgram>>> _epgFlights = {};
-  static const int _epgCacheMinutes = 5;
+  static final Map<String, ({DateTime savedAt, JioTvProgram? program})> _epgCache = {};
 
-  static String _epgText(dynamic value, [String fallback = '']) {
-    if (value == null) return fallback;
-    if (value is List) {
-      final parts = value.map((e) => e?.toString().trim() ?? '')
-          .where((e) => e.isNotEmpty && e.toLowerCase() != 'null');
-      final joined = parts.join(', ');
-      return joined.isEmpty ? fallback : joined;
-    }
-    final text = value.toString().trim();
-    return text.isEmpty || text.toLowerCase() == 'null' ? fallback : text;
-  }
-
-  static int? _epgEpoch(dynamic value) {
-    final parsed = value is num ? value : num.tryParse(value?.toString() ?? '');
-    if (parsed == null) return null;
-    return (parsed.abs() < 10000000000 ? parsed * 1000 : parsed).round();
-  }
-
-  static DateTime? _epgClock(dynamic value, DateTime day) {
-    final text = _epgText(value);
-    final match = RegExp(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$').firstMatch(text);
-    if (match == null) return null;
-    final h = int.tryParse(match.group(1)!) ?? 0;
-    final m = int.tryParse(match.group(2)!) ?? 0;
-    final sec = int.tryParse(match.group(3) ?? '0') ?? 0;
-    if (h > 23 || m > 59 || sec > 59) return null;
-    return DateTime(day.year, day.month, day.day, h, m, sec);
-  }
-
-  static String? _epgImage(dynamic value) {
-    var path = _epgText(value);
-    if (path.isEmpty) return null;
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    path = path.replaceFirst(RegExp(r'^/+'), '');
-    if (path.startsWith('dare_images/')) {
-      return 'https://jiotv.catchup.cdn.jio.com/' + path;
-    }
-    return 'https://jiotv.catchup.cdn.jio.com/dare_images/shows/' + path;
-  }
-
-  static Future<List<JioTvProgram>> schedule(String channelId, int offset) {
-    final key = '$channelId|$offset';
-    final cached = _epgCache[key];
-    if (cached != null &&
-        DateTime.now().difference(cached.savedAt) < const Duration(minutes: _epgCacheMinutes)) {
-      return Future.value(cached.programs);
-    }
-    final running = _epgFlights[key];
-    if (running != null) return running;
-    final flight = _fetchSchedule(channelId, offset);
-    _epgFlights[key] = flight;
-    return flight.whenComplete(() => _epgFlights.remove(key));
-  }
-
-  static Future<List<JioTvProgram>> _fetchSchedule(String channelId, int offset) async {
-    final uri = Uri.https(
-      'jiotv.data.cdn.jio.com',
-      '/apis/v1.3/getepg/get',
-      {'offset': '$offset', 'channel_id': channelId, 'langId': '6'},
-    );
-    final response = await _client.get(uri, headers: _apiHeaders)
-        .timeout(const Duration(seconds: 20));
-    if (response.statusCode != 200) {
-      throw ProviderError('JioTV EPG HTTP ${response.statusCode} (offset $offset)');
-    }
-    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-    final rows = decoded is Map && decoded['epg'] is List
-        ? decoded['epg'] as List
-        : decoded is List ? decoded : const <dynamic>[];
-    final today = DateTime.now();
-    final day = DateTime(today.year, today.month, today.day).add(Duration(days: offset));
-    final programs = <JioTvProgram>[];
-    for (final row in rows.whereType<Map>()) {
-      var startMs = _epgEpoch(row['startEpoch'] ?? row['start_epoch']);
-      var endMs = _epgEpoch(row['endEpoch'] ?? row['end_epoch']);
-      var start = startMs == null ? _epgClock(row['showtime'], day) : DateTime.fromMillisecondsSinceEpoch(startMs);
-      var end = endMs == null ? _epgClock(row['endtime'], day) : DateTime.fromMillisecondsSinceEpoch(endMs);
-      if (start == null) continue;
-      if (end == null) end = start.add(const Duration(hours: 1));
-      if (!end.isAfter(start) && end.difference(start).inSeconds <= 0) {
-        end = end.add(const Duration(days: 1));
-      }
-      if (!end.isAfter(start)) continue;
-      startMs = start.millisecondsSinceEpoch;
-      endMs = end.millisecondsSinceEpoch;
-      final poster = _epgImage(row['episodePoster']);
-      final thumb = _epgImage(row['episodeThumbnail']) ?? poster;
-      final title = _epgText(row['showname'], _epgText(row['showtitle'], 'Program'));
-      final genre = _epgText(row['showGenre']);
-      final category = _epgText(row['showCategory'], genre.isNotEmpty ? genre : 'TV Show');
-      programs.add(JioTvProgram(
-        id: _epgText(row['srno'], '${channelId}_${startMs}'),
-        title: title,
-        description: _epgText(row['description'], 'No episode synopsis available.'),
-        start: start,
-        end: end,
-        poster: poster,
-        thumbnail: thumb,
-        category: category,
-        genre: genre,
-        cast: _epgText(row['starCast']),
-        director: _epgText(row['director']),
-      ));
-    }
-    programs.sort((a, b) => a.start.compareTo(b.start));
-    _epgCache['$channelId|$offset'] = (savedAt: DateTime.now(), programs: programs);
-    return programs;
-  }
-
-  /// Prefetches the selected day first, then the remaining 14 days with a
-  /// bounded worker pool (maximum ten simultaneous CDN requests).
-  static Future<void> prefetchSchedule(String channelId, int selectedOffset) async {
-    try { await schedule(channelId, selectedOffset); } catch (_) {}
-    final offsets = List<int>.generate(15, (i) => i - 7)
-      ..remove(selectedOffset)
-      ..sort((a, b) => a.abs().compareTo(b.abs()));
-    var cursor = 0;
-    Future<void> worker() async {
-      while (true) {
-        final index = cursor++;
-        if (index >= offsets.length) return;
-        try { await schedule(channelId, offsets[index]); } catch (_) {}
-      }
-    }
-    await Future.wait(List.generate(10, (_) => worker()));
-  }
-
+  /// Fetch the current programme using JioTV's official EPG endpoint.
+  /// JioTV returns epoch values in milliseconds and may split listings by offset.
   static Future<JioTvProgram?> currentProgram(String channelId) async {
-    final today = await schedule(channelId, 0);
+    final cached = _epgCache[channelId];
+    if (cached != null &&
+        DateTime.now().difference(cached.savedAt) < const Duration(minutes: 5)) {
+      return cached.program;
+    }
+
+    final headers = <String, String>{
+      ..._apiHeaders,
+      'User-Agent': 'okhttp/4.2.2',
+    };
     final now = DateTime.now();
-    for (final program in today) {
-      if (!now.isBefore(program.start) && now.isBefore(program.end)) return program;
+    JioTvProgram? current;
+    JioTvProgram? next;
+
+    for (final offset in [0, 1]) {
+      final uri = Uri.https(
+        'jiotv.data.cdn.jio.com',
+        '/apis/v1.3/getepg/get/',
+        {'offset': '$offset', 'channel_id': channelId},
+      );
+      final response = await _client.get(uri, headers: headers)
+          .timeout(const Duration(seconds: 18));
+      if (response.statusCode != 200) {
+        if (offset == 0) {
+          throw ProviderError('JioTV programme guide HTTP ${response.statusCode}');
+        }
+        continue;
+      }
+
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      final rows = decoded is Map && decoded['epg'] is List
+          ? decoded['epg'] as List
+          : decoded is List
+              ? decoded
+              : const <dynamic>[];
+
+      for (final row in rows.whereType<Map>()) {
+        final startRaw = num.tryParse(
+          (row['startEpoch'] ?? row['start_epoch'] ?? '').toString(),
+        );
+        final endRaw = num.tryParse(
+          (row['endEpoch'] ?? row['end_epoch'] ?? '').toString(),
+        );
+        if (startRaw == null || endRaw == null) continue;
+
+        // JioTV EPG startEpoch/endEpoch are Unix milliseconds.
+        final startMs = startRaw < 1000000000000 ? startRaw * 1000 : startRaw;
+        final endMs = endRaw < 1000000000000 ? endRaw * 1000 : endRaw;
+        final start = DateTime.fromMillisecondsSinceEpoch(startMs.toInt());
+        final end = DateTime.fromMillisecondsSinceEpoch(endMs.toInt());
+        if (!end.isAfter(start)) continue;
+
+        String? image = (row['episodePoster'] ?? row['episodeThumbnail'])
+            ?.toString().trim();
+        if (image != null && image.isNotEmpty &&
+            image.toLowerCase() != 'null' && !isHttp(image)) {
+          image = 'https://jiotv.catchup.cdn.jio.com/dare_images/shows/${image.replaceFirst(RegExp(r'^/+'), '')}';
+        }
+        final title = (row['showname'] ?? row['title'] ?? '').toString().trim();
+        if (title.isEmpty) continue;
+
+        final program = JioTvProgram(
+          title: title,
+          description: (row['description'] ?? '').toString().trim(),
+          start: start,
+          end: end,
+          poster: image,
+        );
+        if (!now.isBefore(start) && now.isBefore(end)) {
+          current = program;
+          break;
+        }
+        if (start.isAfter(now) && (next == null || start.isBefore(next.start))) {
+          next = program;
+        }
+      }
+      if (current != null) break;
     }
-    for (final program in today) {
-      if (program.start.isAfter(now)) return program;
-    }
-    return today.isNotEmpty ? today.last : null;
+
+    // If JioTV's current slot is missing, at least show its next scheduled slot
+    // rather than rendering an entirely blank programme section.
+    final result = current ?? next;
+    _epgCache[channelId] = (savedAt: DateTime.now(), program: result);
+    return result;
   }
 
   Future<List<Item>> _loadChannels() async {
