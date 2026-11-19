@@ -110,7 +110,7 @@ jobs:
                                           "durationMs" to duration,
                                           "bufferedMs" to activePlayer.bufferedPosition.coerceAtLeast(0L),
                                           "volume" to activePlayer.volume.toDouble(),
-                                          "error" to (activePlayer.playerError?.message ?: "")
+                                          "error" to (JioTvPlayerHolder.error.ifBlank { activePlayer.playerError?.errorCodeName ?: "" })
                                       ))
                                   }
                               }
@@ -289,6 +289,8 @@ jobs:
           import androidx.media3.common.MediaItem
           import androidx.media3.common.MimeTypes
           import androidx.media3.common.Player
+          import androidx.media3.common.PlaybackException
+          import androidx.media3.datasource.HttpDataSource
           import androidx.media3.datasource.okhttp.OkHttpDataSource
           import androidx.media3.exoplayer.DefaultRenderersFactory
           import androidx.media3.exoplayer.ExoPlayer
@@ -308,6 +310,7 @@ jobs:
 
           internal object JioTvPlayerHolder {
               @Volatile var player: ExoPlayer? = null
+              @Volatile var error: String = ""
           }
 
           class JioTvExoPlayerFactory : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
@@ -335,6 +338,9 @@ jobs:
                       ?: "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36"
                   val cookie = args["cookie"]?.toString().orEmpty()
                   val requestHeaders = mutableMapOf<String, String>()
+                  requestHeaders["Origin"] = "https://www.jiotv.com"
+                  requestHeaders["Referer"] = "https://www.jiotv.com/tv-guide"
+                  requestHeaders["Accept"] = "*/*"
                   if (cookie.isNotBlank()) requestHeaders["Cookie"] = cookie
                   val extra = args["extraHeaders"] as? Map<*, *>
                   extra?.forEach { (key, value) ->
@@ -393,6 +399,23 @@ jobs:
                       DefaultRenderersFactory(context).setEnableDecoderFallback(true)
                   ).setMediaSourceFactory(mediaSourceFactory).build()
                   JioTvPlayerHolder.player = player
+                  JioTvPlayerHolder.error = ""
+                  player.addListener(object : Player.Listener {
+                      override fun onPlayerError(error: PlaybackException) {
+                          val causes = generateSequence(error as Throwable?) { it.cause }
+                              .take(8).toList()
+                          val httpError = causes.filterIsInstance<HttpDataSource.InvalidResponseCodeException>().firstOrNull()
+                          val details = causes.mapNotNull { cause ->
+                              cause.message?.takeIf { it.isNotBlank() }?.replace(Regex("https?://\\\\S+"), "<stream-url>")
+                          }.distinct().joinToString(" | ")
+                          JioTvPlayerHolder.error = buildString {
+                              append(error.errorCodeName)
+                              append(" [").append(error.errorCode).append("]")
+                              if (httpError != null) append(" HTTP ").append(httpError.responseCode)
+                              if (details.isNotBlank()) append(" — ").append(details)
+                          }
+                      }
+                  })
 
                   player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                       .setForceHighestSupportedBitrate(true)
@@ -433,7 +456,10 @@ jobs:
 
               override fun dispose() {
                   playerView.player = null
-                  if (JioTvPlayerHolder.player === player) JioTvPlayerHolder.player = null
+                  if (JioTvPlayerHolder.player === player) {
+                      JioTvPlayerHolder.player = null
+                      JioTvPlayerHolder.error = ""
+                  }
                   player.release()
               }
 
