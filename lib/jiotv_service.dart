@@ -652,7 +652,7 @@ class JioTvAdapter extends Adapter {
           final status = _playbackValue(row['status']).toLowerCase();
           final url = _playbackValue(
             row['mpd_url'] ?? row['stream_url'] ?? row['channel_url'] ??
-            row['hls_url'] ?? row['url'],
+            row['hls_url'] ?? row['ready_to_use_link'] ?? row['readyToUseLink'] ?? row['url'],
           );
           if (url.isNotEmpty && (status.isEmpty || status == 'success')) {
             final rawHeaders = row['extraHeaders'] ?? row['headers'];
@@ -664,17 +664,33 @@ class JioTvAdapter extends Adapter {
                 }
               }
             }
-            final cookie = _playbackValue(row['cookie']);
+            var cookie = _playbackValue(row['cookie']);
             final keys = _playbackValue(row['all_keys'] ?? row['allKeys']);
             var scheme = _playbackValue(row['drmScheme'] ?? row['drm_scheme']).toLowerCase();
+            var license = _playbackValue(row['drmLicense'] ?? row['license_url'] ?? row['drm_license']);
+            var userAgent = _playbackValue(row['userAgent'] ?? row['user_agent']);
+            final pipeParts = url.split('|');
+            for (final part in pipeParts.skip(1)) {
+              final index = part.indexOf('=');
+              if (index <= 0) continue;
+              final name = part.substring(0, index).trim().toLowerCase();
+              final value = part.substring(index + 1).trim();
+              if (name == 'cookie') cookie = value;
+              if (name == 'drmscheme' || name == 'drm_scheme') scheme = value.toLowerCase();
+              if (name == 'drmlicense' || name == 'licenseurl' || name == 'license_url') license = value;
+              if (name == 'useragent' || name == 'user_agent') userAgent = value;
+              if (name == 'all_keys' || name == 'allkeys') {
+                // The final parsed value is forwarded as the W3C ClearKey source.
+              }
+              if (name == 'referer' || name == 'origin') headers[name == 'referer' ? 'Referer' : 'Origin'] = value;
+            }
             if (scheme.isEmpty && keys.isNotEmpty) scheme = 'clearkey';
-            final userAgent = _playbackValue(row['userAgent'] ?? row['user_agent']);
             return <String, dynamic>{
-              'url': url.split('|').first.trim(),
+              'url': pipeParts.first.trim(),
               'cookie': cookie,
               'allKeys': keys,
               'drmScheme': scheme,
-              'licenseUrl': _playbackValue(row['drmLicense'] ?? row['license_url'] ?? row['drm_license']),
+              'licenseUrl': license,
               'userAgent': userAgent.isEmpty ? _playbackUserAgent : userAgent,
               'extraHeaders': headers,
             };
