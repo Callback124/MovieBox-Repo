@@ -505,7 +505,7 @@ class JioTvAdapter extends Adapter {
   }
 
   /// Prefetches the selected day first, then the remaining 14 days with a
-  /// bounded worker pool (maximum three simultaneous CDN requests).
+  /// bounded worker pool (maximum ten simultaneous CDN requests).
   static Future<void> prefetchSchedule(String channelId, int selectedOffset) async {
     try { await schedule(channelId, selectedOffset); } catch (_) {}
     final offsets = List<int>.generate(15, (i) => i - 7)
@@ -519,7 +519,7 @@ class JioTvAdapter extends Adapter {
         try { await schedule(channelId, offsets[index]); } catch (_) {}
       }
     }
-    await Future.wait(List.generate(3, (_) => worker()));
+    await Future.wait(List.generate(10, (_) => worker()));
   }
 
   static Future<JioTvProgram?> currentProgram(String channelId) async {
