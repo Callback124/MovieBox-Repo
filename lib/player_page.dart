@@ -722,8 +722,7 @@ class _PlayerPageState extends State<PlayerPage> {
     } else if (point.dx > width * 2 / 3) {
       _skipFromGesture(10);
     } else {
-      final controller = _player;
-      if (controller == null) return;
+      if (!_isJioTv && _player == null) return;
       final wasPlaying = _isPlaying;
       unawaited(_togglePlayback());
       _showGestureIndicator(
@@ -1133,7 +1132,7 @@ class _PlayerPageState extends State<PlayerPage> {
           title: Text('${r}x'),
           trailing: r == _rate ? const Icon(Icons.check) : null,
           onTap: () {
-            _player?.setPlaybackSpeed(r);
+            unawaited(_setPlaybackRate(r));
             setState(() => _rate = r);
             Navigator.pop(context);
           },
