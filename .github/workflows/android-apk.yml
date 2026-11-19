@@ -234,6 +234,226 @@ jobs:
           EOF
           echo "Configured MainActivity for audio_service FlutterEngine"
 
+      - name: Add native JioTV Media3 ExoPlayer
+        run: |
+          cat > android/app/src/main/kotlin/com/moviefox/moviefox/JioTvExoPlayerView.kt <<'EOF'
+          package com.moviefox.moviefox
+
+          import android.content.Context
+          import android.media.MediaDrm
+          import android.net.Uri
+          import android.util.Base64
+          import android.view.View
+          import androidx.media3.common.C
+          import androidx.media3.common.MediaItem
+          import androidx.media3.common.MimeTypes
+          import androidx.media3.common.Player
+          import androidx.media3.datasource.okhttp.OkHttpDataSource
+          import androidx.media3.exoplayer.DefaultRenderersFactory
+          import androidx.media3.exoplayer.ExoPlayer
+          import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
+          import androidx.media3.exoplayer.drm.FrameworkMediaDrm
+          import androidx.media3.exoplayer.drm.HttpMediaDrmCallback
+          import androidx.media3.exoplayer.drm.LocalMediaDrmCallback
+          import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+          import androidx.media3.ui.PlayerView
+          import io.flutter.plugin.common.StandardMessageCodec
+          import io.flutter.plugin.platform.PlatformView
+          import io.flutter.plugin.platform.PlatformViewFactory
+          import okhttp3.OkHttpClient
+          import org.json.JSONArray
+          import org.json.JSONObject
+          import java.util.concurrent.TimeUnit
+
+          class JioTvExoPlayerFactory : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+              override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
+                  @Suppress("UNCHECKED_CAST")
+                  val values = args as? Map<*, *> ?: emptyMap<Any, Any>()
+                  return JioTvExoPlayerView(context, values)
+              }
+          }
+
+          private class JioTvExoPlayerView(
+              context: Context,
+              args: Map<*, *>
+          ) : PlatformView {
+              private val player: ExoPlayer
+              private val playerView: PlayerView
+
+              init {
+                  val streamUrl = args["url"]?.toString()?.substringBefore('|')?.trim().orEmpty()
+                  require(streamUrl.startsWith("https://") || streamUrl.startsWith("http://")) {
+                      "JioTV returned an invalid stream URL"
+                  }
+
+                  val userAgent = args["userAgent"]?.toString()?.takeIf { it.isNotBlank() }
+                      ?: "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36"
+                  val cookie = args["cookie"]?.toString().orEmpty()
+                  val requestHeaders = mutableMapOf<String, String>()
+                  if (cookie.isNotBlank()) requestHeaders["Cookie"] = cookie
+                  val extra = args["extraHeaders"] as? Map<*, *>
+                  extra?.forEach { (key, value) ->
+                      if (key != null && value != null) requestHeaders[key.toString()] = value.toString()
+                  }
+
+                  val okHttpClient = OkHttpClient.Builder()
+                      .connectTimeout(20, TimeUnit.SECONDS)
+                      .readTimeout(30, TimeUnit.SECONDS)
+                      .followRedirects(true)
+                      .followSslRedirects(true)
+                      .addInterceptor { chain ->
+                          val request = chain.request().newBuilder()
+                              .header("User-Agent", userAgent)
+                              .apply {
+                                  if (cookie.isNotBlank()) header("Cookie", cookie)
+                                  requestHeaders.forEach { (name, value) ->
+                                      if (!name.equals("User-Agent", ignoreCase = true)) header(name, value)
+                                  }
+                              }
+                              .build()
+                          chain.proceed(request)
+                      }
+                      .build()
+
+                  val dataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
+                      .setUserAgent(userAgent)
+                      .setDefaultRequestProperties(requestHeaders)
+                  val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+
+                  val drmScheme = args["drmScheme"]?.toString()?.lowercase().orEmpty()
+                  val allKeys = args["allKeys"]?.toString().orEmpty()
+                  val licenseUrl = args["licenseUrl"]?.toString().orEmpty()
+                  var drmManager: androidx.media3.exoplayer.drm.DrmSessionManager? = null
+
+                  if (drmScheme == "clearkey" && allKeys.isNotBlank() &&
+                      MediaDrm.isCryptoSchemeSupported(C.CLEARKEY_UUID)) {
+                      val jwk = buildClearKeyJson(allKeys)
+                      drmManager = DefaultDrmSessionManager.Builder()
+                          .setUuidAndExoMediaDrmProvider(C.CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
+                          .setMultiSession(true)
+                          .build(LocalMediaDrmCallback(jwk))
+                  } else if (drmScheme == "widevine" && licenseUrl.startsWith("http")) {
+                      drmManager = DefaultDrmSessionManager.Builder()
+                          .setUuidAndExoMediaDrmProvider(C.WIDEVINE_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
+                          .setMultiSession(true)
+                          .build(HttpMediaDrmCallback(licenseUrl, dataSourceFactory))
+                  }
+
+                  if (drmManager != null) {
+                      mediaSourceFactory.setDrmSessionManagerProvider { drmManager!! }
+                  }
+
+                  player = ExoPlayer.Builder(
+                      context,
+                      DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+                  ).setMediaSourceFactory(mediaSourceFactory).build()
+
+                  player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                      .setForceHighestSupportedBitrate(true)
+                      .build()
+
+                  val path = Uri.parse(streamUrl).lastPathSegment?.lowercase().orEmpty()
+                  val mimeType = when {
+                      path.endsWith(".mpd") -> MimeTypes.APPLICATION_MPD
+                      path.endsWith(".m3u8") -> MimeTypes.APPLICATION_M3U8
+                      else -> null
+                  }
+                  val mediaItemBuilder = MediaItem.Builder().setUri(streamUrl)
+                  if (mimeType != null) mediaItemBuilder.setMimeType(mimeType)
+                  if (drmScheme == "clearkey" && allKeys.isNotBlank()) {
+                      mediaItemBuilder.setDrmConfiguration(
+                          MediaItem.DrmConfiguration.Builder(C.CLEARKEY_UUID).setMultiSession(true).build()
+                      )
+                  } else if (drmScheme == "widevine" && licenseUrl.startsWith("http")) {
+                      mediaItemBuilder.setDrmConfiguration(
+                          MediaItem.DrmConfiguration.Builder(C.WIDEVINE_UUID)
+                              .setLicenseUri(licenseUrl)
+                              .setMultiSession(true)
+                              .build()
+                      )
+                  }
+
+                  playerView = PlayerView(context).apply {
+                      useController = true
+                      setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                      player = this@JioTvExoPlayerView.player
+                  }
+                  player.setMediaItem(mediaItemBuilder.build())
+                  player.playWhenReady = true
+                  player.prepare()
+              }
+
+              override fun getView(): View = playerView
+
+              override fun dispose() {
+                  playerView.player = null
+                  player.release()
+              }
+
+              private fun buildClearKeyJson(raw: String): ByteArray {
+                  val keys = JSONArray()
+                  raw.split(',').forEach { pair ->
+                      val parts = pair.trim().split(':', limit = 2)
+                      if (parts.size == 2) {
+                          val kid = hexToBase64Url(parts[0])
+                          val key = hexToBase64Url(parts[1])
+                          if (kid.isNotBlank() && key.isNotBlank()) {
+                              keys.put(JSONObject().put("kty", "oct").put("kid", kid).put("k", key))
+                          }
+                      }
+                  }
+                  require(keys.length() > 0) { "JioTV ClearKey data contains no valid KID:key pairs" }
+                  return JSONObject().put("keys", keys).put("type", "temporary")
+                      .toString().toByteArray(Charsets.UTF_8)
+              }
+
+              private fun hexToBase64Url(value: String): String {
+                  val clean = value.trim().replace("-", "")
+                  if (clean.length == 32 && clean.all { it in "0123456789abcdefABCDEF" }) {
+                      val bytes = ByteArray(16) { index ->
+                          clean.substring(index * 2, index * 2 + 2).toInt(16).toByte()
+                      }
+                      return Base64.encodeToString(
+                          bytes, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP
+                      )
+                  }
+                  return clean.replace('+', '-').replace('/', '_').trimEnd('=')
+              }
+          }
+          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('android/app/src/main/kotlin/com/moviefox/moviefox/MainActivity.kt')
+          content = path.read_text()
+          anchor = '                  super.configureFlutterEngine(flutterEngine)\n'
+          registration = '''                  flutterEngine.platformViewsController.registry.registerViewFactory(
+                      "moviefox/jiotv_exoplayer",
+                      JioTvExoPlayerFactory()
+                  )
+          '''
+          if 'moviefox/jiotv_exoplayer' not in content:
+              if anchor not in content:
+                  raise SystemExit('MainActivity configureFlutterEngine anchor missing')
+              content = content.replace(anchor, anchor + registration, 1)
+          path.write_text(content)
+          print('Registered the native JioTV Media3 ExoPlayer platform view')
+          PY
+
+      - name: Add AndroidX Media3 and OkHttp dependencies
+        run: |
+          cat >> android/app/build.gradle.kts <<'EOF'
+
+          dependencies {
+              implementation("androidx.media3:media3-exoplayer:1.5.1")
+              implementation("androidx.media3:media3-exoplayer-dash:1.5.1")
+              implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
+              implementation("androidx.media3:media3-datasource-okhttp:1.5.1")
+              implementation("androidx.media3:media3-ui:1.5.1")
+              implementation("com.squareup.okhttp3:okhttp:4.12.0")
+          }
+          EOF
+          echo "Added Media3 DASH/HLS/OkHttp player dependencies"
+
       - name: Declare Android audio playback service
         run: |
           python3 - <<'PY'
