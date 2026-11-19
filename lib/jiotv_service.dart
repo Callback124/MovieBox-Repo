@@ -574,7 +574,11 @@ class JioTvAdapter extends Adapter {
       'mpd_url': raw['mpd_url'] ?? raw['mpdUrl'],
       'ready_to_use_link': raw['ready_to_use_link'] ?? raw['readyToUseLink'],
     };
-    final extras = <String, String>{};
+    final extras = <String, String>{
+      'Origin': 'https://www.jiotv.com',
+      'Referer': 'https://www.jiotv.com/tv-guide',
+      'Accept': '*/*',
+    };
     final suppliedHeaders = raw['headers'] ?? raw['streamHeaders'] ?? raw['extraHeaders'];
     if (suppliedHeaders is Map) {
       for (final entry in suppliedHeaders.entries) {
@@ -654,9 +658,13 @@ class JioTvAdapter extends Adapter {
             row['mpd_url'] ?? row['stream_url'] ?? row['channel_url'] ??
             row['hls_url'] ?? row['ready_to_use_link'] ?? row['readyToUseLink'] ?? row['url'],
           );
-          if (url.isNotEmpty && (status.isEmpty || status == 'success')) {
+          if (url.isNotEmpty && (status.isEmpty || const {'success', 'ok', 'true', '200', 'available'}.contains(status))) {
             final rawHeaders = row['extraHeaders'] ?? row['headers'];
-            final headers = <String, String>{};
+            final headers = <String, String>{
+              'Origin': 'https://www.jiotv.com',
+              'Referer': 'https://www.jiotv.com/tv-guide',
+              'Accept': '*/*',
+            };
             if (rawHeaders is Map) {
               for (final entry in rawHeaders.entries) {
                 if (entry.key != null && entry.value != null) {
