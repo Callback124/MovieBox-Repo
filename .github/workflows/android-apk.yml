@@ -425,11 +425,11 @@ jobs:
           from pathlib import Path
           path = Path('android/app/src/main/kotlin/com/moviefox/moviefox/MainActivity.kt')
           content = path.read_text()
-          anchor = '                  super.configureFlutterEngine(flutterEngine)\n'
-          registration = '''                  flutterEngine.platformViewsController.registry.registerViewFactory(
-                      "moviefox/jiotv_exoplayer",
-                      JioTvExoPlayerFactory()
-                  )
+          anchor = '        super.configureFlutterEngine(flutterEngine)\n'
+          registration = '''        flutterEngine.platformViewsController.registry.registerViewFactory(
+            "moviefox/jiotv_exoplayer",
+            JioTvExoPlayerFactory()
+        )
           '''
           if 'moviefox/jiotv_exoplayer' not in content:
               if anchor not in content:
