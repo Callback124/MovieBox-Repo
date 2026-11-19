@@ -401,14 +401,14 @@ class _DetailPageState extends State<DetailPage> {
                                               const SizedBox(height: 3),
                                               Text('${program.timeLabel}  ·  ${program.category}', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
                                               const SizedBox(height: 5),
-                                              Text(program.description, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, height: 1.35)),
+                                              Text(program.description, style: const TextStyle(fontSize: 12, height: 1.35)),
                                               if (program.genre.isNotEmpty || program.cast.isNotEmpty || program.director.isNotEmpty) ...[
                                                 const SizedBox(height: 4),
                                                 Text([
                                                   if (program.genre.isNotEmpty) program.genre,
                                                   if (program.cast.isNotEmpty) 'Cast: ${program.cast}',
                                                   if (program.director.isNotEmpty) 'Director: ${program.director}',
-                                                ].join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+                                                ].join(' · '), style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
                                               ],
                                               if (program.status == 'LIVE') ...[
                                                 const SizedBox(height: 6),
