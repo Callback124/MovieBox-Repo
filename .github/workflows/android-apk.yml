@@ -429,7 +429,7 @@ jobs:
           registration = '''        flutterEngine.platformViewsController.registry.registerViewFactory(
             "moviefox/jiotv_exoplayer",
             JioTvExoPlayerFactory()
-        )
+            )
           '''
           if 'moviefox/jiotv_exoplayer' not in content:
               if anchor not in content:
