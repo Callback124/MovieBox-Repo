@@ -28,11 +28,16 @@ class _DetailPageState extends State<DetailPage> {
       ? JioTvAdapter.currentProgram(widget.item.id)
       : Future.value(null);
   Timer? _programTicker;
+  int _jioOffset = 0;
+  late Future<List<JioTvProgram>> _jioSchedule = widget.item.pid == 'jiotv'
+      ? JioTvAdapter.schedule(widget.item.id, 0)
+      : Future.value(const <JioTvProgram>[]);
 
   @override
   void initState() {
     super.initState();
     if (widget.item.pid == 'jiotv') {
+      JioTvAdapter.prefetchSchedule(widget.item.id, 0);
       _programTicker = Timer.periodic(const Duration(seconds: 60), (_) {
         if (mounted) {
           setState(() {
@@ -298,57 +303,127 @@ class _DetailPageState extends State<DetailPage> {
                   ),
                 if (isJioTv)
                   SliverToBoxAdapter(
-                    child: FutureBuilder<JioTvProgram?>(
-                      future: _jioProgram,
-                      builder: (context, programSnap) {
-                        final program = programSnap.data;
-                        if (programSnap.connectionState == ConnectionState.waiting) {
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Programme Schedule', style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            height: 42,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              children: [
+                                for (final offset in List<int>.generate(15, (i) => i - 7))
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 7),
+                                    child: ChoiceChip(
+                                      showCheckmark: false,
+                                      label: Text(offset == 0 ? 'Today' : offset < 0 ? '${offset.abs()} days ago' : 'In $offset days'),
+                                      selected: _jioOffset == offset,
+                                      onSelected: (_) => setState(() {
+                                        _jioOffset = offset;
+                                        _jioSchedule = JioTvAdapter.schedule(widget.item.id, offset);
+                                      }),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (isJioTv)
+                  SliverToBoxAdapter(
+                    child: FutureBuilder<List<JioTvProgram>>(
+                      future: _jioSchedule,
+                      builder: (context, scheduleSnap) {
+                        if (scheduleSnap.connectionState == ConnectionState.waiting) {
                           return const Padding(
-                            padding: EdgeInsets.fromLTRB(16, 8, 16, 14),
-                            child: LinearProgressIndicator(minHeight: 3),
+                            padding: EdgeInsets.all(18),
+                            child: Center(child: CircularProgressIndicator()),
                           );
                         }
-                        if (program == null) {
-                          return const Padding(
-                            padding: EdgeInsets.fromLTRB(16, 8, 16, 14),
-                            child: Text('Programme information is not available for this channel right now.'),
+                        if (scheduleSnap.hasError) {
+                          return Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text('EPG load failed: ${scheduleSnap.error}', style: TextStyle(color: cs.error)),
                           );
                         }
-                        final description = program.description.trim();
-                        final elapsed = DateTime.now().isBefore(program.start)
-                            ? Duration.zero
-                            : DateTime.now().difference(program.start);
-                        final remaining = program.end.difference(DateTime.now());
-                        String duration(Duration value) {
-                          final minutes = value.inMinutes.abs();
-                          return '${minutes ~/ 60}h ${(minutes % 60).toString().padLeft(2, '0')}m';
+                        final programs = scheduleSnap.data ?? const <JioTvProgram>[];
+                        if (programs.isEmpty) {
+                          return const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text('Is date ke liye programme schedule available nahi hai.'),
+                          );
                         }
                         return Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (description.isNotEmpty)
-                                Text(description, style: const TextStyle(height: 1.5)),
-                              const SizedBox(height: 10),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(program.timeLabel,
-                                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                                  Text('${duration(elapsed)} elapsed · ${duration(remaining)} left',
-                                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                                ],
-                              ),
-                              const SizedBox(height: 7),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(99),
-                                child: LinearProgressIndicator(
-                                  value: program.progress,
-                                  minHeight: 6,
-                                  backgroundColor: cs.surfaceContainerHighest,
+                              for (final program in programs)
+                                Card(
+                                  margin: const EdgeInsets.only(bottom: 9),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(10),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        if (isHttp(program.thumbnail))
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(7),
+                                            child: CachedNetworkImage(
+                                              cacheManager: AppImageCache.instance,
+                                              imageUrl: program.thumbnail!,
+                                              width: 88,
+                                              height: 66,
+                                              fit: BoxFit.cover,
+                                              errorWidget: (_, __, ___) => Container(width: 88, height: 66, color: cs.surfaceContainerHighest),
+                                            ),
+                                          )
+                                        else
+                                          Container(width: 88, height: 66, decoration: BoxDecoration(color: cs.surfaceContainerHighest, borderRadius: BorderRadius.circular(7)), child: const Icon(Icons.tv)),
+                                        const SizedBox(width: 11),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Expanded(child: Text(program.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
+                                                  const SizedBox(width: 6),
+                                                  Text(program.status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: program.status == 'LIVE' ? Colors.red : cs.primary)),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 3),
+                                              Text('${program.timeLabel}  ·  ${program.category}', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                                              const SizedBox(height: 5),
+                                              Text(program.description, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, height: 1.35)),
+                                              if (program.genre.isNotEmpty || program.cast.isNotEmpty || program.director.isNotEmpty) ...[
+                                                const SizedBox(height: 4),
+                                                Text([
+                                                  if (program.genre.isNotEmpty) program.genre,
+                                                  if (program.cast.isNotEmpty) 'Cast: ${program.cast}',
+                                                  if (program.director.isNotEmpty) 'Director: ${program.director}',
+                                                ].join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+                                              ],
+                                              if (program.status == 'LIVE') ...[
+                                                const SizedBox(height: 6),
+                                                ClipRRect(
+                                                  borderRadius: BorderRadius.circular(99),
+                                                  child: LinearProgressIndicator(value: program.progress, minHeight: 5, backgroundColor: cs.surfaceContainerHighest),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                         );
