@@ -395,11 +395,22 @@ class _DetailPageState extends State<DetailPage> {
                                                 children: [
                                                   Expanded(child: Text(program.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
                                                   const SizedBox(width: 6),
-                                                  Text(program.status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: program.status == 'LIVE' ? Colors.red : cs.primary)),
+                                                  InkWell(
+                                                    onTap: program.status == 'LIVE' ? () => _play(d, null) : null,
+                                                    borderRadius: BorderRadius.circular(20),
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      decoration: BoxDecoration(
+                                                        color: program.status == 'LIVE' ? Colors.red.withValues(alpha: .12) : cs.surfaceContainerHighest,
+                                                        borderRadius: BorderRadius.circular(20),
+                                                      ),
+                                                      child: Text(program.status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: program.status == 'LIVE' ? Colors.red : cs.primary)),
+                                                    ),
+                                                  ),
                                                 ],
                                               ),
                                               const SizedBox(height: 3),
-                                              Text('${program.timeLabel}  ·  ${program.category}', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                                              Text('${program.timeLabel}  ·  ${program.end.difference(program.start).inMinutes.round()} min  ·  ${program.category}', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
                                               const SizedBox(height: 5),
                                               Text(program.description, style: const TextStyle(fontSize: 12, height: 1.35)),
                                               if (program.genre.isNotEmpty || program.cast.isNotEmpty || program.director.isNotEmpty) ...[
