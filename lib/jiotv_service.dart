@@ -665,7 +665,7 @@ class JioTvAdapter extends Adapter {
               }
             }
             var cookie = _playbackValue(row['cookie']);
-            final keys = _playbackValue(row['all_keys'] ?? row['allKeys']);
+            var keys = _playbackValue(row['all_keys'] ?? row['allKeys']);
             var scheme = _playbackValue(row['drmScheme'] ?? row['drm_scheme']).toLowerCase();
             var license = _playbackValue(row['drmLicense'] ?? row['license_url'] ?? row['drm_license']);
             var userAgent = _playbackValue(row['userAgent'] ?? row['user_agent']);
@@ -679,9 +679,7 @@ class JioTvAdapter extends Adapter {
               if (name == 'drmscheme' || name == 'drm_scheme') scheme = value.toLowerCase();
               if (name == 'drmlicense' || name == 'licenseurl' || name == 'license_url') license = value;
               if (name == 'useragent' || name == 'user_agent') userAgent = value;
-              if (name == 'all_keys' || name == 'allkeys') {
-                // The final parsed value is forwarded as the W3C ClearKey source.
-              }
+              if (name == 'all_keys' || name == 'allkeys') keys = value;
               if (name == 'referer' || name == 'origin') headers[name == 'referer' ? 'Referer' : 'Origin'] = value;
             }
             if (scheme.isEmpty && keys.isNotEmpty) scheme = 'clearkey';
