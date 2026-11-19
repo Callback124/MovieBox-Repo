@@ -118,6 +118,10 @@ class JioTvAdapter extends Adapter {
   static final http.Client _client = http.Client();
   static List<Item>? _channelCache;
   static Future<List<Item>>? _channelFlight;
+  static final Map<String, Map<String, dynamic>> _rawChannelById = {};
+
+  static const _playbackUserAgent = 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36';
+  static const _workerPlaybackUrl = 'https://eliteapiyash.streamxlive.workers.dev';
 
   String? _first(Map raw, List<String> keys) {
     for (final key in keys) {
@@ -359,6 +363,7 @@ class JioTvAdapter extends Adapter {
 
   Item _toItem(Map<String, dynamic> raw) {
     final id = _channelId(raw);
+    _rawChannelById[id] = Map<String, dynamic>.from(raw);
     final name = _first(raw, [
       'channel_name', 'name', 'title', 'channelName'
     ]) ?? 'Channel ' + id;
@@ -532,6 +537,154 @@ class JioTvAdapter extends Adapter {
       if (program.start.isAfter(now)) return program;
     }
     return today.isNotEmpty ? today.last : null;
+  }
+
+  static String _playbackValue(dynamic value) {
+    if (value == null) return '';
+    final text = value.toString().trim();
+    return text.toLowerCase() == 'null' ? '' : text;
+  }
+
+  static Map<String, dynamic> _playbackRow(dynamic decoded) {
+    if (decoded is List) {
+      for (final value in decoded) {
+        if (value is Map) return Map<String, dynamic>.from(value);
+      }
+    }
+    if (decoded is Map) {
+      for (final key in ['data', 'result', 'stream', 'playback']) {
+        final nested = decoded[key];
+        if (nested is List) {
+          for (final value in nested) {
+            if (value is Map) return Map<String, dynamic>.from(value);
+          }
+        }
+        if (nested is Map) return Map<String, dynamic>.from(nested);
+      }
+      return Map<String, dynamic>.from(decoded);
+    }
+    return <String, dynamic>{};
+  }
+
+  static Map<String, dynamic> _fallbackPlayback(Item item) {
+    final raw = _rawChannelById[item.id] ?? <String, dynamic>{};
+    final values = <String, dynamic>{
+      ...raw,
+      'channel_url': raw['channel_url'] ?? raw['channelUrl'],
+      'mpd_url': raw['mpd_url'] ?? raw['mpdUrl'],
+      'ready_to_use_link': raw['ready_to_use_link'] ?? raw['readyToUseLink'],
+    };
+    final extras = <String, String>{};
+    final suppliedHeaders = raw['headers'] ?? raw['streamHeaders'] ?? raw['extraHeaders'];
+    if (suppliedHeaders is Map) {
+      for (final entry in suppliedHeaders.entries) {
+        if (entry.key != null && entry.value != null) {
+          extras[entry.key.toString()] = entry.value.toString();
+        }
+      }
+    }
+
+    String url = '';
+    String cookie = _playbackValue(raw['cookie']);
+    String allKeys = _playbackValue(raw['all_keys'] ?? raw['allKeys']);
+    String drmScheme = _playbackValue(raw['drmScheme'] ?? raw['drm_scheme']);
+    String licenseUrl = _playbackValue(raw['drmLicense'] ?? raw['drm_license'] ?? raw['license_url']);
+
+    for (final key in ['ready_to_use_link', 'channel_url', 'mpd_url', 'stream_url', 'channelUrl']) {
+      final candidate = _playbackValue(values[key]);
+      if (candidate.isEmpty) continue;
+      final parts = candidate.split('|');
+      if (url.isEmpty && (parts.first.startsWith('http://') || parts.first.startsWith('https://'))) {
+        url = parts.first.trim();
+      }
+      for (final part in parts.skip(1)) {
+        final index = part.indexOf('=');
+        if (index <= 0) continue;
+        final name = part.substring(0, index).trim().toLowerCase();
+        final value = part.substring(index + 1).trim();
+        if (name == 'cookie') cookie = value;
+        if (name == 'all_keys' || name == 'allkeys') allKeys = value;
+        if (name == 'drmscheme' || name == 'drm_scheme') drmScheme = value;
+        if (name == 'drmlicense' || name == 'licenseurl' || name == 'license_url') licenseUrl = value;
+        if (name == 'useragent' || name == 'user_agent') extras['User-Agent'] = value;
+        if (name == 'referer') extras['Referer'] = value;
+        if (name == 'origin') extras['Origin'] = value;
+      }
+    }
+
+    if (url.isEmpty && item.sources.isNotEmpty) {
+      url = item.sources.first.url ?? '';
+      if (cookie.isEmpty) cookie = _playbackValue(item.sources.first.headers['Cookie']);
+      extras.addAll(item.sources.first.headers);
+    }
+    if (url.isEmpty) {
+      throw ProviderError('JioTV playback URL is missing in Worker response and npoint fallback.');
+    }
+    if (drmScheme.isEmpty && allKeys.isNotEmpty) drmScheme = 'clearkey';
+    final userAgent = _playbackValue(extras.remove('User-Agent'));
+    return <String, dynamic>{
+      'url': url,
+      'cookie': cookie,
+      'allKeys': allKeys,
+      'drmScheme': drmScheme.toLowerCase(),
+      'licenseUrl': licenseUrl,
+      'userAgent': userAgent.isEmpty ? _playbackUserAgent : userAgent,
+      'extraHeaders': extras,
+    };
+  }
+
+  /// Resolves JioTV playback through the primary Worker API and falls back to
+  /// the original npoint channel object whenever the Worker cannot provide a stream.
+  static Future<Map<String, dynamic>> resolvePlayback(Item item) async {
+    final numericId = int.tryParse(item.id) ?? 0;
+    if (numericId > 0 && numericId < 1000000) {
+      try {
+        final response = await _client.get(
+          Uri.parse(_workerPlaybackUrl + '?id=' + Uri.encodeQueryComponent(item.id)),
+          headers: const {
+            'User-Agent': _playbackUserAgent,
+            'Accept': 'application/json',
+          },
+        ).timeout(const Duration(seconds: 18));
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+          final row = _playbackRow(decoded);
+          final status = _playbackValue(row['status']).toLowerCase();
+          final url = _playbackValue(
+            row['mpd_url'] ?? row['stream_url'] ?? row['channel_url'] ??
+            row['hls_url'] ?? row['url'],
+          );
+          if (url.isNotEmpty && (status.isEmpty || status == 'success')) {
+            final rawHeaders = row['extraHeaders'] ?? row['headers'];
+            final headers = <String, String>{};
+            if (rawHeaders is Map) {
+              for (final entry in rawHeaders.entries) {
+                if (entry.key != null && entry.value != null) {
+                  headers[entry.key.toString()] = entry.value.toString();
+                }
+              }
+            }
+            final cookie = _playbackValue(row['cookie']);
+            final keys = _playbackValue(row['all_keys'] ?? row['allKeys']);
+            var scheme = _playbackValue(row['drmScheme'] ?? row['drm_scheme']).toLowerCase();
+            if (scheme.isEmpty && keys.isNotEmpty) scheme = 'clearkey';
+            final userAgent = _playbackValue(row['userAgent'] ?? row['user_agent']);
+            return <String, dynamic>{
+              'url': url.split('|').first.trim(),
+              'cookie': cookie,
+              'allKeys': keys,
+              'drmScheme': scheme,
+              'licenseUrl': _playbackValue(row['drmLicense'] ?? row['license_url'] ?? row['drm_license']),
+              'userAgent': userAgent.isEmpty ? _playbackUserAgent : userAgent,
+              'extraHeaders': headers,
+            };
+          }
+        }
+      } catch (_) {
+        // Continue with the npoint fallback below (including 403/451/410).
+      }
+    }
+    return _fallbackPlayback(item);
   }
 
   Future<List<Item>> _loadChannels() async {
