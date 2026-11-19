@@ -10,7 +10,6 @@ import 'providers.dart';
 import 'store.dart';
 import 'widgets.dart';
 import 'jiotv_service.dart';
-import 'jiotv_player_page.dart';
 
 class DetailPage extends StatefulWidget {
   const DetailPage({super.key, required this.item});
@@ -90,15 +89,9 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   Future<void> _play(Item d, Episode? ep) async {
-    if (d.pid == 'jiotv') {
-      await Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => JioTvPlayerPage(item: d),
-      ));
-    } else {
-      await Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => PlayerPage(item: d, ep: ep, list: d.episodes),
-      ));
-    }
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => PlayerPage(item: d, ep: ep, list: d.episodes),
+    ));
     if (mounted) setState(() {});
   }
 
