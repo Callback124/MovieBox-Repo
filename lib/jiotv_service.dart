@@ -415,7 +415,7 @@ class JioTvAdapter extends Adapter {
 
   static DateTime? _epgClock(dynamic value, DateTime day) {
     final text = _epgText(value);
-    final match = RegExp(r'^(\\d{1,2}):(\\d{2})(?::(\\d{2}))?$').firstMatch(text);
+    final match = RegExp(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$').firstMatch(text);
     if (match == null) return null;
     final h = int.tryParse(match.group(1)!) ?? 0;
     final m = int.tryParse(match.group(2)!) ?? 0;
@@ -507,7 +507,7 @@ class JioTvAdapter extends Adapter {
   /// Prefetches the selected day first, then the remaining 14 days with a
   /// bounded worker pool (maximum three simultaneous CDN requests).
   static Future<void> prefetchSchedule(String channelId, int selectedOffset) async {
-    await schedule(channelId, selectedOffset);
+    try { await schedule(channelId, selectedOffset); } catch (_) {}
     final offsets = List<int>.generate(15, (i) => i - 7)
       ..remove(selectedOffset)
       ..sort((a, b) => a.abs().compareTo(b.abs()));
@@ -528,7 +528,10 @@ class JioTvAdapter extends Adapter {
     for (final program in today) {
       if (!now.isBefore(program.start) && now.isBefore(program.end)) return program;
     }
-    return today.where((p) => p.start.isAfter(now)).firstOrNull;
+    for (final program in today) {
+      if (program.start.isAfter(now)) return program;
+    }
+    return today.isNotEmpty ? today.last : null;
   }
 
   Future<List<Item>> _loadChannels() async {
