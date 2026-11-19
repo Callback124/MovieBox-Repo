@@ -37,6 +37,8 @@ jobs:
           cat > android/app/src/main/kotlin/com/moviefox/moviefox/MainActivity.kt <<'EOF'
           package com.moviefox.moviefox
 
+          import androidx.media3.common.C
+          import androidx.media3.common.Player
           import android.app.DownloadManager
           import android.content.ContentValues
           import android.content.Intent
