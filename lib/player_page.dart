@@ -11,6 +11,7 @@ import 'providers.dart';
 import 'jiosaavn_service.dart';
 import 'store.dart';
 import 'widgets.dart';
+import 'jiotv_service.dart';
 
 const Color _kSeek = Color(0xFFE8335F);
 
@@ -57,6 +58,19 @@ class _PlayerPageState extends State<PlayerPage> {
   IconData? _indicatorIcon;
   Timer? _gestureIndicatorTimer;
   static const MethodChannel _playerChannel = MethodChannel('app.stratus/player');
+  static const MethodChannel _jioPlayerChannel = MethodChannel('app.moviefox/jiotv-player');
+  Map<String, dynamic>? _jioPlayback;
+  Timer? _jioStateTimer;
+  bool _jioReady = false;
+  bool _jioPlaying = false;
+  Duration _jioPosition = Duration.zero;
+  Duration _jioDuration = Duration.zero;
+  double _jioVolume = 1.0;
+  bool get _isJioTv => _item.pid == 'jiotv';
+  bool get _isPlaying => _isJioTv ? _jioPlaying : (_player?.value.isPlaying ?? false);
+  Duration get _position => _isJioTv ? _jioPosition : (_player?.value.position ?? Duration.zero);
+  Duration get _duration => _isJioTv ? _jioDuration : (_player?.value.duration ?? Duration.zero);
+  double get _volume => _isJioTv ? _jioVolume : (_player?.value.volume ?? 1.0);
   bool get _isLandscape =>
       MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height;
 
@@ -130,6 +144,10 @@ class _PlayerPageState extends State<PlayerPage> {
       _storyTvSelectedTrackId = null;
       _cur = null;
     });
+    if (_isJioTv) {
+      await _setupJioTv(gen);
+      return;
+    }
     try {
       final l = await getSources(_item, _ep);
       if (!mounted || gen != _gen) return;
@@ -166,6 +184,132 @@ class _PlayerPageState extends State<PlayerPage> {
     } catch (e) {
       _transitioning = false;
       if (mounted && gen == _gen) setState(() => _msg = e.toString());
+    }
+  }
+
+  Future<void> _setupJioTv(int gen) async {
+    try {
+      final playback = await JioTvAdapter.resolvePlayback(_item);
+      if (!mounted || gen != _gen) return;
+      if (!Platform.isAndroid) {
+        setState(() {
+          _msg = 'JioTV playback is available on Android only.';
+          _showPickInMsg = false;
+          _buffering = false;
+        });
+        return;
+      }
+      _jioStateTimer?.cancel();
+      _jioPlayback = playback;
+      _cur = Source.clean(
+        name: 'JioTV',
+        url: playback['url']?.toString(),
+        headers: <String, String>{
+          if ((playback['userAgent'] ?? '').toString().isNotEmpty)
+            'User-Agent': playback['userAgent'].toString(),
+          if ((playback['cookie'] ?? '').toString().isNotEmpty)
+            'Cookie': playback['cookie'].toString(),
+        },
+      );
+      setState(() {
+        _msg = null;
+        _showPickInMsg = false;
+        _buffering = true;
+        _jioReady = false;
+        _jioPlaying = false;
+        _jioPosition = Duration.zero;
+        _jioDuration = Duration.zero;
+      });
+      _jioStateTimer = Timer.periodic(
+        const Duration(milliseconds: 500),
+        (_) => _pollJioPlayer(),
+      );
+    } catch (e) {
+      _transitioning = false;
+      if (mounted && gen == _gen) {
+        setState(() {
+          _msg = 'JioTV stream error: $e';
+          _showPickInMsg = true;
+          _buffering = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _pollJioPlayer() async {
+    if (!mounted || !_isJioTv || _jioPlayback == null) return;
+    try {
+      final state = await _jioPlayerChannel.invokeMapMethod<String, dynamic>('getState');
+      if (!mounted || state == null) return;
+      final error = state['error']?.toString();
+      final ready = state['isReady'] == true;
+      final position = (state['positionMs'] as num?)?.toInt() ?? 0;
+      final duration = (state['durationMs'] as num?)?.toInt() ?? 0;
+      final playing = state['isPlaying'] == true;
+      final buffering = state['isBuffering'] == true || !ready;
+      setState(() {
+        _jioReady = ready;
+        _jioPlaying = playing;
+        _jioPosition = Duration(milliseconds: position < 0 ? 0 : position);
+        _jioDuration = Duration(milliseconds: duration < 0 ? 0 : duration);
+        _buffering = buffering && error == null;
+        if (error != null && error.isNotEmpty) {
+          _msg = 'Player error: $error';
+          _showPickInMsg = true;
+        } else if (ready) {
+          _msg = null;
+        }
+      });
+    } catch (_) {
+      // The Android platform view may not be attached during the first poll.
+    }
+  }
+
+  Future<void> _jioCommand(String method, [dynamic arguments]) async {
+    try {
+      await _jioPlayerChannel.invokeMethod<void>(method, arguments);
+    } catch (_) {}
+  }
+
+  Future<void> _togglePlayback() async {
+    if (_isJioTv) {
+      await _jioCommand(_jioPlaying ? 'pause' : 'play');
+      await _pollJioPlayer();
+      return;
+    }
+    final controller = _player;
+    if (controller == null) return;
+    if (controller.value.isPlaying) {
+      await controller.pause();
+    } else {
+      await controller.play();
+    }
+  }
+
+  Future<void> _seekPlayback(Duration position) async {
+    if (_isJioTv) {
+      await _jioCommand('seekTo', position.inMilliseconds);
+      await _pollJioPlayer();
+    } else {
+      await _player?.seekTo(position);
+    }
+  }
+
+  Future<void> _setPlaybackRate(double rate) async {
+    if (_isJioTv) {
+      await _jioCommand('setSpeed', rate);
+    } else {
+      await _player?.setPlaybackSpeed(rate);
+    }
+  }
+
+  Future<void> _setPlaybackVolume(double volume) async {
+    final value = volume.clamp(0.0, 1.0);
+    if (_isJioTv) {
+      _jioVolume = value;
+      await _jioCommand('setVolume', value);
+    } else {
+      await _player?.setVolume(value);
     }
   }
 
@@ -508,9 +652,9 @@ class _PlayerPageState extends State<PlayerPage> {
 
     // The unlock icon follows the same auto-hide behavior as player controls.
     // While locked, it also auto-hides when playback is paused.
-    if (_locked || (_player?.value.isPlaying ?? false)) {
+    if (_locked || _isPlaying) {
       _hideTimer = Timer(const Duration(seconds: 4), () {
-        if (mounted && (_locked || (_player?.value.isPlaying ?? false))) {
+        if (mounted && (_locked || _isPlaying)) {
           setState(() => _visible = false);
         }
       });
@@ -580,12 +724,8 @@ class _PlayerPageState extends State<PlayerPage> {
     } else {
       final controller = _player;
       if (controller == null) return;
-      final wasPlaying = controller.value.isPlaying;
-      if (wasPlaying) {
-        controller.pause();
-      } else {
-        controller.play();
-      }
+      final wasPlaying = _isPlaying;
+      unawaited(_togglePlayback());
       _showGestureIndicator(
         wasPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
         wasPlaying ? 'Paused' : 'Playing',
@@ -596,6 +736,14 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _skipFromGesture(int seconds) {
+    if (_isJioTv) {
+      final target = _position + Duration(seconds: seconds);
+      final duration = _duration;
+      final position = target < Duration.zero ? Duration.zero : (duration > Duration.zero && target > duration ? duration : target);
+      unawaited(_seekPlayback(position));
+      _showGestureIndicator(seconds < 0 ? Icons.replay_10_rounded : Icons.forward_10_rounded, '${seconds > 0 ? '+' : ''}${seconds}s', 0);
+      return;
+    }
     final controller = _player;
     if (controller == null || !controller.value.isInitialized) return;
     final target = controller.value.position + Duration(seconds: seconds);
@@ -614,7 +762,7 @@ class _PlayerPageState extends State<PlayerPage> {
   void _onGesturePanStart(DragStartDetails details) {
     if (!_isLandscape || _locked) return;
     _gestureStart = details.localPosition;
-    _gestureStartPosition = _player?.value.position ?? Duration.zero;
+    _gestureStartPosition = _position;
     _gestureMode = 'pending';
     _gestureStartValue = 0.5;
     _seekDeltaSeconds = 0;
@@ -631,7 +779,7 @@ class _PlayerPageState extends State<PlayerPage> {
       _hideControlsForGesture();
       if (dx.abs() > dy.abs()) {
         _gestureMode = 'seek';
-        _gestureStartPosition = _player?.value.position ?? Duration.zero;
+        _gestureStartPosition = _position;
       } else {
         final width = MediaQuery.sizeOf(context).width;
         if (start.dx < width / 2) {
@@ -643,7 +791,7 @@ class _PlayerPageState extends State<PlayerPage> {
           }).catchError((_) {});
         } else {
           _gestureMode = 'volume';
-          _gestureStartValue = _player?.value.volume ?? 1.0;
+          _gestureStartValue = _volume;
         }
       }
     }
@@ -653,12 +801,12 @@ class _PlayerPageState extends State<PlayerPage> {
         _playerChannel.invokeMethod<void>('setBrightness', value).catchError((_) {});
         _showGestureIndicator(Icons.brightness_6_rounded, 'Brightness ${(value * 100).round()}%', value);
       } else {
-        _player?.setVolume(value);
+        unawaited(_setPlaybackVolume(value));
         _showGestureIndicator(Icons.volume_up_rounded, 'Volume ${(value * 100).round()}%', value);
       }
     } else {
       _gestureMode = 'seek';
-      final duration = _player?.value.duration ?? Duration.zero;
+      final duration = _duration;
       final delta = (dx / 5).round();
       _seekDeltaSeconds = delta.toDouble();
       final target = _gestureStartPosition + Duration(seconds: delta);
@@ -681,7 +829,7 @@ class _PlayerPageState extends State<PlayerPage> {
       _seekPreview = null;
     });
     if (completedMode == 'seek' && seekPreview != null) {
-      _player?.seekTo(seekPreview);
+      unawaited(_seekPlayback(seekPreview));
       _showGestureIndicator(
         seekDelta < 0 ? Icons.fast_rewind_rounded : Icons.fast_forward_rounded,
         '${_previewTime(Duration(seconds: seekDelta))} · ${_fmt(seekPreview)}',
@@ -694,7 +842,7 @@ class _PlayerPageState extends State<PlayerPage> {
   void _onGestureLongPressStart(LongPressStartDetails details) {
     if (!_isLandscape || _locked) return;
     _hideControlsForGesture();
-    _player?.setPlaybackSpeed(2.0);
+    unawaited(_setPlaybackRate(2.0));
     if (mounted) {
       setState(() {
         _indicatorIcon = Icons.fast_forward_rounded;
@@ -706,7 +854,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
   void _onGestureLongPressEnd(LongPressEndDetails details) {
     if (!_isLandscape || _locked) return;
-    _player?.setPlaybackSpeed(_rate);
+    unawaited(_setPlaybackRate(_rate));
     if (mounted) setState(() {
       _indicatorIcon = null;
       _indicatorLabel = null;
@@ -714,6 +862,13 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _skip(int seconds) {
+    if (_isJioTv) {
+      final p = _position + Duration(seconds: seconds);
+      final d = _duration;
+      unawaited(_seekPlayback(p < Duration.zero ? Duration.zero : (d > Duration.zero && p > d ? d : p)));
+      _kick();
+      return;
+    }
     final controller = _player;
     if (controller == null || !controller.value.isInitialized) return;
     final p = controller.value.position + Duration(seconds: seconds);
@@ -779,7 +934,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
   Future<void> _switchDub(DubOption dub) async {
     if (dub.subjectId == _item.id && dub.detailPath == _item.detailPath) return;
-    final previous = _player?.value.position ?? Duration.zero;
+    final previous = _position;
     final previousSeason = _ep?.season;
     final previousEpisode = _ep?.episode;
     final current = _item.copyWith(id: dub.subjectId, detailPath: dub.detailPath);
@@ -1002,6 +1157,7 @@ class _PlayerPageState extends State<PlayerPage> {
   void dispose() {
     _hideTimer?.cancel();
     _gestureIndicatorTimer?.cancel();
+    _jioStateTimer?.cancel();
     _playerChannel.invokeMethod<void>('resetBrightness').catchError((_) {});
     _saveNow();
     app.progressRev.value++;
@@ -1042,7 +1198,15 @@ class _PlayerPageState extends State<PlayerPage> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (_player != null && _player!.value.isInitialized)
+            if (_isJioTv && _jioPlayback != null && Platform.isAndroid)
+              Positioned.fill(
+                child: AndroidView(
+                  viewType: 'moviefox/jiotv_exoplayer',
+                  creationParams: <String, dynamic>{..._jioPlayback!, 'title': _item.title},
+                  creationParamsCodec: const StandardMessageCodec(),
+                ),
+              )
+            else if (_player != null && _player!.value.isInitialized)
               SizedBox.expand(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -1287,14 +1451,9 @@ class _PlayerPageState extends State<PlayerPage> {
                 ),
               )
             : control(
-                icon: (_player?.value.isPlaying ?? false)
-                    ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                tooltip: (_player?.value.isPlaying ?? false) ? 'Pause' : 'Play',
-                onPressed: () {
-                  final c = _player;
-                  if (c == null) return;
-                  c.value.isPlaying ? c.pause() : c.play();
-                },
+                icon: _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                tooltip: _isPlaying ? 'Pause' : 'Play',
+                onPressed: _togglePlayback,
                 size: 64,
                 color: Colors.white,
               ),
@@ -1323,7 +1482,21 @@ class _PlayerPageState extends State<PlayerPage> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (_player == null)
+        if (_isJioTv)
+          Row(
+            children: [
+              SizedBox(width: 50, child: Text(_fmt(_jioPosition), style: const TextStyle(color: Colors.white, fontSize: 13))),
+              Expanded(
+                child: _jioDuration > Duration.zero
+                    ? _SeekBar(position: _jioPosition, duration: _jioDuration, buffer: _jioPosition,
+                        onSeek: (d) { unawaited(_seekPlayback(d)); _kick(); })
+                    : Container(height: 3, color: Colors.white24),
+              ),
+              SizedBox(width: 56, child: Text(_jioDuration > Duration.zero ? _fmt(_jioDuration) : 'LIVE', textAlign: TextAlign.end,
+                  style: const TextStyle(color: Colors.white, fontSize: 13))),
+            ],
+          )
+        else if (_player == null)
           Row(children: [const SizedBox(width: 50), Expanded(child: Container(height: 3, color: Colors.white24)), const SizedBox(width: 56)])
         else
           AnimatedBuilder(
@@ -1340,7 +1513,7 @@ class _PlayerPageState extends State<PlayerPage> {
                     style: const TextStyle(color: Colors.white, fontSize: 13))),
                 Expanded(child: _SeekBar(
                   position: pos, duration: dur, buffer: buffer,
-                  onSeek: (d) { _player?.seekTo(d); _kick(); },
+                  onSeek: (d) { unawaited(_seekPlayback(d)); _kick(); }
                 )),
                 SizedBox(width: 56, child: Text(_fmt(dur), textAlign: TextAlign.end,
                     style: const TextStyle(color: Colors.white, fontSize: 13))),
