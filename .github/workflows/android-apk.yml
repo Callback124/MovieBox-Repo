@@ -90,6 +90,45 @@ jobs:
 
               override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
                   super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.moviefox/jiotv-player")
+                      .setMethodCallHandler { call, result ->
+                          val activePlayer = JioTvPlayerHolder.player
+                          when (call.method) {
+                              "getState" -> {
+                                  if (activePlayer == null) {
+                                      result.success(null)
+                                  } else {
+                                      val duration = if (activePlayer.duration == C.TIME_UNSET) 0L
+                                          else activePlayer.duration.coerceAtLeast(0L)
+                                      result.success(mapOf(
+                                          "isReady" to (activePlayer.playbackState == Player.STATE_READY),
+                                          "isPlaying" to activePlayer.isPlaying,
+                                          "isBuffering" to (activePlayer.playbackState == Player.STATE_BUFFERING),
+                                          "positionMs" to activePlayer.currentPosition.coerceAtLeast(0L),
+                                          "durationMs" to duration,
+                                          "bufferedMs" to activePlayer.bufferedPosition.coerceAtLeast(0L),
+                                          "volume" to activePlayer.volume.toDouble(),
+                                          "error" to (activePlayer.playerError?.message ?: "")
+                                      ))
+                                  }
+                              }
+                              "play" -> { activePlayer?.play(); result.success(true) }
+                              "pause" -> { activePlayer?.pause(); result.success(true) }
+                              "seekTo" -> {
+                                  activePlayer?.seekTo((call.arguments as? Number)?.toLong() ?: 0L)
+                                  result.success(true)
+                              }
+                              "setVolume" -> {
+                                  activePlayer?.volume = ((call.arguments as? Number)?.toFloat() ?: 1f).coerceIn(0f, 1f)
+                                  result.success(true)
+                              }
+                              "setSpeed" -> {
+                                  activePlayer?.setPlaybackSpeed((call.arguments as? Number)?.toFloat() ?: 1f)
+                                  result.success(true)
+                              }
+                              else -> result.notImplemented()
+                          }
+                      }
                   MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.stratus/player")
                       .setMethodCallHandler { call, result ->
                           when (call.method) {
@@ -265,6 +304,10 @@ jobs:
           import org.json.JSONObject
           import java.util.concurrent.TimeUnit
 
+          internal object JioTvPlayerHolder {
+              @Volatile var player: ExoPlayer? = null
+          }
+
           class JioTvExoPlayerFactory : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
               override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
                   @Suppress("UNCHECKED_CAST")
@@ -347,6 +390,7 @@ jobs:
                       context,
                       DefaultRenderersFactory(context).setEnableDecoderFallback(true)
                   ).setMediaSourceFactory(mediaSourceFactory).build()
+                  JioTvPlayerHolder.player = player
 
                   player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                       .setForceHighestSupportedBitrate(true)
@@ -374,7 +418,7 @@ jobs:
                   }
 
                   playerView = PlayerView(context).apply {
-                      useController = true
+                      useController = false
                       setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                       player = this@JioTvExoPlayerView.player
                   }
@@ -387,6 +431,7 @@ jobs:
 
               override fun dispose() {
                   playerView.player = null
+                  if (JioTvPlayerHolder.player === player) JioTvPlayerHolder.player = null
                   player.release()
               }
 
