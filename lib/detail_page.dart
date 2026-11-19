@@ -401,7 +401,7 @@ class _DetailPageState extends State<DetailPage> {
                                                     child: Container(
                                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                       decoration: BoxDecoration(
-                                                        color: program.status == 'LIVE' ? Colors.red.withValues(alpha: .12) : cs.surfaceContainerHighest,
+                                                        color: program.status == 'LIVE' ? Colors.red.withOpacity(0.12) : cs.surfaceContainerHighest,
                                                         borderRadius: BorderRadius.circular(20),
                                                       ),
                                                       child: Text(program.status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: program.status == 'LIVE' ? Colors.red : cs.primary)),
